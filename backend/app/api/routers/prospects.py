@@ -107,6 +107,41 @@ async def export_brief(
         session.close()
 
 
+@router.get("/prospects/{prospect_id}/briefs")
+async def list_brief_versions(
+    prospect_id: str, user: AuthenticatedUser = Depends(get_current_user)
+) -> list[dict]:
+    """List all brief versions for a prospect."""
+    session = get_session()
+    try:
+        repo = ProspectRepository(session)
+        briefs = repo.list_brief_versions(prospect_id, owner_id=user.user_id)
+        if not briefs:
+            raise HTTPException(status_code=404, detail="Prospect not found or no briefs")
+        return [
+            {"version": b.version, "created_at": b.created_at.isoformat(), "source_run_id": b.source_run_id}
+            for b in briefs
+        ]
+    finally:
+        session.close()
+
+
+@router.get("/prospects/{prospect_id}/briefs/{version}")
+async def get_brief_version(
+    prospect_id: str, version: int, user: AuthenticatedUser = Depends(get_current_user)
+) -> dict:
+    """Get a specific brief version."""
+    session = get_session()
+    try:
+        repo = ProspectRepository(session)
+        brief = repo.get_brief_version(prospect_id, owner_id=user.user_id, version=version)
+        if brief is None:
+            raise HTTPException(status_code=404, detail="Brief version not found")
+        return brief.data
+    finally:
+        session.close()
+
+
 @router.delete("/prospects/{prospect_id}", status_code=204)
 async def delete_prospect(
     prospect_id: str, user: AuthenticatedUser = Depends(get_current_user)
