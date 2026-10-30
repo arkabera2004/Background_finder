@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from app.core.auth import AuthenticatedUser, get_current_user
 from app.db.memory_store import run_store
 from app.db.prospect_repository import ProspectRepository
 from app.db.session import get_session
+from app.services.brief_export import to_json, to_markdown, to_pdf
 
 router = APIRouter()
 
@@ -75,6 +77,32 @@ async def get_prospect(
             raise HTTPException(status_code=404, detail="Prospect not found")
         latest_brief = max(prospect.briefs, key=lambda b: b.version).data if prospect.briefs else None
         return _prospect_to_dict(prospect, latest_brief)
+    finally:
+        session.close()
+
+
+@router.get("/prospects/{prospect_id}/brief/export")
+async def export_brief(
+    prospect_id: str,
+    format: str = "json",
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> Response:
+    if format not in ("json", "md", "pdf"):
+        raise HTTPException(status_code=422, detail="format must be one of: json, md, pdf")
+
+    session = get_session()
+    try:
+        repo = ProspectRepository(session)
+        prospect = repo.get(prospect_id, owner_id=user.user_id)
+        if prospect is None or not prospect.briefs:
+            raise HTTPException(status_code=404, detail="Prospect or brief not found")
+        latest_brief = max(prospect.briefs, key=lambda b: b.version).data
+
+        if format == "json":
+            return Response(content=to_json(latest_brief), media_type="application/json")
+        if format == "md":
+            return Response(content=to_markdown(latest_brief), media_type="text/markdown")
+        return Response(content=to_pdf(latest_brief), media_type="application/pdf")
     finally:
         session.close()
 
