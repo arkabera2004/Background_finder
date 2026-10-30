@@ -43,6 +43,7 @@ class Pipeline:
         except Exception as exc:  # noqa: BLE001 - re-raised as a typed pipeline error
             raise StageFailedError(name, exc) from exc
         ctx.outputs[name.value] = result.output
+        ctx.outputs[f"_sources_{name.value}"] = result.sources
         return result
 
     async def run(self, ctx: StageContext) -> dict[StageName, StageResult]:
