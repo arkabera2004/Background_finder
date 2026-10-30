@@ -7,22 +7,31 @@ isn't listed here, check docs/PHASE_TRACKER.md before assuming it works.
 
 Nothing has run against a real Supabase project, Anthropic API, Tavily/Exa,
 Firecrawl, Bright Data, or People Data Labs. No account/credential exists for
-any of these. Everything built so far is either:
-- pure logic, unit-tested without network access (URL validation, the
-  pipeline orchestrator's ordering/concurrency, the manual profile provider), or
-- wired to read credentials from env vars but never exercised live.
+any of these. Every provider adapter (Bright Data, PDL, Tavily, Firecrawl)
+is written and configuration-gated — it reads its key from settings and
+either calls the real API or raises/returns-empty when unconfigured —
+but the "calls the real API" branch has never executed, since no key
+exists to exercise it. See docs/API_INTEGRATION.md for the exact
+IMPLEMENTED/BLOCKED split per provider.
 
-## Phases 2-7 are not implemented
+## What's real now vs. what's still missing
 
-Only Phase 0 (foundations) and a slice of Phase 1 (research input schemas,
-pipeline orchestrator skeleton, provider abstraction with a working manual
-fallback) exist. The seven stage *implementations* themselves
-(resolve_identity, fetch_profile, analyse_career, research_company,
-analyse_activity, web_footprint, synthesise_brief) are not written — only the
-interface and orchestrator that will run them. Company research, activity
-analysis, web footprint, brief synthesis, citations, exports (JSON/MD/PDF),
-the full frontend research/brief UI, Playwright E2E, the 20-profile eval
-suite, and deployment are all NOT_STARTED.
+All seven pipeline stages are now implemented and run end-to-end in
+manual mode (pasted-text intake, no credentials) — see
+docs/PHASE_TRACKER.md for exactly what each stage does. Real HTTP
+endpoints exist: `POST /research`, `POST /research/pdf`, `GET /runs/{id}`,
+`GET /runs/{id}/events` (SSE), `/runs/{id}/cancel`, `/runs/{id}/retry`.
+The frontend's New Research form and run detail page call these for real.
+
+Still NOT_STARTED: identity candidate disambiguation (multiple matches —
+currently trusts user input directly), career insights from unstructured
+pasted text (works only when structured `Experience` data exists, which
+manual paste doesn't produce), brief exports (JSON/MD/PDF), brief
+versioning, `docs/brief-schema.json`, prospect/company persistence beyond
+the in-memory run store, dashboard/prospects/companies real data, the
+Anthropic client wrapper (synthesis today is rule-based, not AI-written),
+Playwright E2E, the 20-profile eval suite, rate limiting, retention jobs,
+and deployment.
 
 ## No database has ever been touched
 
