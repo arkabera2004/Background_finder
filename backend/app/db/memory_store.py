@@ -28,6 +28,10 @@ class Run:
     id: str
     owner_id: str
     depth: str
+    full_name: str = ""
+    linkedin_url: str | None = None
+    company: str | None = None
+    pasted_text: str | None = None
     status: str = "pending"  # pending | running | completed | failed | cancelled
     steps: dict[str, RunStep] = field(default_factory=dict)
     brief: dict[str, Any] | None = None
