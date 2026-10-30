@@ -6,12 +6,13 @@ provider isn't configured. See docs/KNOWN_LIMITATIONS.md for exactly which
 stages are data-limited without Tavily/Firecrawl/Bright Data/PDL/Anthropic.
 """
 
+from app.providers.ai_provider import AiProvider
 from app.providers.company_crawler import CompanyCrawler
 from app.providers.profile_provider import ProfileProvider
 from app.providers.search_provider import SearchProvider
-from app.schemas.brief import Claim, Confidence, Hook, ProspectBrief, Source
+from app.schemas.brief import Source
+from app.services.ai_brief_synthesizer import rule_based_synthesis, synthesize_with_ai
 from app.services.career_analysis import analyse_career
-from app.services.citation_validator import validate_brief
 from app.stages.base import Stage, StageContext, StageName, StageResult
 
 
@@ -144,18 +145,25 @@ class WebFootprintStage(Stage):
 
 
 class SynthesiseBriefStage(Stage):
-    """Deterministic, rule-based synthesis — no Anthropic call.
+    """Synthesises the Prospect Brief.
 
-    Real LLM-based synthesis (richer prose, inferred priorities) requires
-    ANTHROPIC_API_KEY and is NOT_STARTED. This produces a smaller but
-    completely honest brief: every claim traces to a real source or is
-    explicitly marked as an inference, never invented.
+    Tries the configured AiProvider first (if one is given); on any
+    failure — no provider configured, provider unreachable, invalid
+    structured output twice — falls back to the original deterministic
+    rule-based synthesis. The output always records which path was
+    actually used (`_synthesis_metadata.synthesis_method`), so the app
+    never claims AI synthesis happened when it didn't.
     """
 
     name = StageName.SYNTHESISE_BRIEF
 
+    def __init__(self, ai_provider: AiProvider | None = None):
+        self.ai_provider = ai_provider
+
     async def run(self, ctx: StageContext) -> StageResult:
         person = ctx.outputs.get("_person")
+        person_data = person.model_dump() if person is not None else None
+
         sources_raw: list[dict] = []
         for stage_name in (
             StageName.RESEARCH_COMPANY.value,
@@ -169,41 +177,21 @@ class SynthesiseBriefStage(Stage):
             if s.get("url")
         ]
 
-        snapshot = []
-        if person is not None:
-            headline_claim = Claim(
-                text=f"{person.full_name}" + (f" — {person.headline}" if person.headline else ""),
-                is_inference=False,
-                source_ids=[],
-                confidence=Confidence.HIGH,
-            )
-            # The profile itself (manual input or provider) is the source of
-            # truth for name/headline, so it's not tied to a web source id —
-            # mark as an "inference" only in the sense of "not web-sourced",
-            # kept as high confidence since it's user-supplied, not guessed.
-            snapshot.append(headline_claim.model_copy(update={"is_inference": True}))
-
         career = ctx.outputs.get(StageName.ANALYSE_CAREER.value, {})
-        career_claims = []
-        if career.get("total_months_experience"):
-            career_claims.append(
-                Claim(
-                    text=f"Approximately {career['total_months_experience']} months of tracked experience.",
-                    is_inference=True,
-                    confidence=Confidence.MEDIUM,
+
+        brief = None
+        metadata = None
+        if self.ai_provider is not None:
+            try:
+                brief, metadata = await synthesize_with_ai(
+                    self.ai_provider, person_data or {}, career, sources
                 )
-            )
+            except Exception:  # noqa: BLE001 - any AI failure falls back honestly
+                brief, metadata = None, None
 
-        hooks = [
-            Hook(text=f"Mentioned in: {s.title or s.url}", source_ids=[s.id]) for s in sources[:7]
-        ]
+        if brief is None:
+            brief, metadata = rule_based_synthesis(person_data, career, sources)
 
-        brief = ProspectBrief(
-            prospect_name=getattr(person, "full_name", "Unknown"),
-            snapshot=snapshot,
-            career_story=career_claims,
-            sources=sources,
-            hooks=hooks,
-        )
-        validated = validate_brief(brief)
-        return StageResult(stage=self.name, output=validated.model_dump())
+        output = brief.model_dump()
+        output["_synthesis_metadata"] = metadata
+        return StageResult(stage=self.name, output=output)
