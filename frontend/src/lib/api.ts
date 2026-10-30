@@ -33,7 +33,44 @@ export interface Me {
   email: string | null;
 }
 
+export type ResearchDepth = "quick" | "standard" | "deep";
+
+export interface ResearchRequest {
+  linkedin_url?: string;
+  full_name?: string;
+  company?: string;
+  pasted_text?: string;
+  depth?: ResearchDepth;
+}
+
+export interface RunStepView {
+  status: "pending" | "running" | "completed" | "failed";
+  error: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface RunView {
+  id: string;
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  depth: string;
+  steps: Record<string, RunStepView>;
+  brief: Record<string, unknown> | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
 export const api = {
   health: () => request<{ status: string }>("/health"),
   me: () => request<Me>("/me"),
+  createResearch: (body: ResearchRequest) =>
+    request<{ run_id: string; status: string }>("/research", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  getRun: (runId: string) => request<RunView>(`/runs/${runId}`),
+  cancelRun: (runId: string) =>
+    request<{ run_id: string; status: string }>(`/runs/${runId}/cancel`, { method: "POST" }),
+  retryRun: (runId: string) =>
+    request<{ run_id: string; status: string }>(`/runs/${runId}/retry`, { method: "POST" }),
 };
