@@ -60,6 +60,19 @@ export interface RunView {
   completed_at: string | null;
 }
 
+export interface Prospect {
+  id: string;
+  full_name: string;
+  linkedin_url: string | null;
+  tags: string[];
+  status: string;
+  source_run_id: string | null;
+  created_at: string;
+  brief: Record<string, unknown> | null;
+}
+
+export type ExportFormat = "json" | "md" | "pdf";
+
 export const api = {
   health: () => request<{ status: string }>("/health"),
   me: () => request<Me>("/me"),
@@ -73,4 +86,29 @@ export const api = {
     request<{ run_id: string; status: string }>(`/runs/${runId}/cancel`, { method: "POST" }),
   retryRun: (runId: string) =>
     request<{ run_id: string; status: string }>(`/runs/${runId}/retry`, { method: "POST" }),
+  saveProspect: (runId: string) =>
+    request<Prospect>("/prospects", { method: "POST", body: JSON.stringify({ run_id: runId }) }),
+  listProspects: () => request<Prospect[]>("/prospects"),
+  getProspect: (id: string) => request<Prospect>(`/prospects/${id}`),
+  deleteProspect: async (id: string) => {
+    const supabase = createClient();
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    const res = await fetch(`${API_URL}/prospects/${id}`, {
+      method: "DELETE",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new ApiError(res.status, await res.text());
+  },
+  exportBriefUrl: async (id: string, format: ExportFormat) => {
+    const supabase = createClient();
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    const res = await fetch(`${API_URL}/prospects/${id}/brief/export?format=${format}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new ApiError(res.status, await res.text());
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  },
 };
