@@ -59,6 +59,11 @@ export default function RunDetailPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["run", runId] }),
   });
 
+  const saveMutation = useMutation({
+    mutationFn: () => api.saveProspect(runId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["prospects"] }),
+  });
+
   if (isLoading || !run) {
     return (
       <div className="max-w-2xl space-y-3">
@@ -122,8 +127,16 @@ export default function RunDetailPage() {
                 exactly what backs each claim.
               </AlertDescription>
             </Alert>
-            <Button variant="outline" size="sm" onClick={() => router.push(`/prospects`)}>
-              View in Prospect Library
+            <Button
+              size="sm"
+              onClick={() =>
+                saveMutation.mutate(undefined, {
+                  onSuccess: (prospect) => router.push(`/prospects/${prospect.id}`),
+                })
+              }
+              disabled={saveMutation.isPending}
+            >
+              {saveMutation.isPending ? "Saving..." : "Save to Prospect Library"}
             </Button>
           </CardContent>
         </Card>
