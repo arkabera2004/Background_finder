@@ -1,10 +1,20 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routers import health, me, research
+from app.api.routers import health, me, prospects, research
 from app.core.config import settings
+from app.db.session import init_db
 
-app = FastAPI(title="ProspectLens API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title="ProspectLens API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -17,3 +27,4 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(me.router)
 app.include_router(research.router)
+app.include_router(prospects.router)
