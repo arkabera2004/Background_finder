@@ -1,6 +1,11 @@
 import pytest
 
-from app.providers.company_crawler import FirecrawlCrawler, NullCrawler, build_company_crawler
+from app.providers.company_crawler import (
+    FirecrawlCrawler,
+    LocalExtractionCrawler,
+    NullCrawler,
+    build_company_crawler,
+)
 from app.providers.search_provider import (
     DuckDuckGoProvider,
     NullSearchProvider,
@@ -64,11 +69,38 @@ async def test_duckduckgo_search_is_live_and_returns_real_urls():
     assert all(r.url.startswith("http") for r in results)
 
 
-def test_build_crawler_falls_back_to_null_without_key():
-    crawler = build_company_crawler(firecrawl_api_key=None)
+def test_build_crawler_defaults_to_local_extraction():
+    crawler = build_company_crawler("local")
+    assert isinstance(crawler, LocalExtractionCrawler)
+
+
+def test_build_crawler_firecrawl_falls_back_to_null_without_key():
+    crawler = build_company_crawler("firecrawl", firecrawl_api_key=None)
     assert isinstance(crawler, NullCrawler)
 
 
 def test_build_crawler_uses_firecrawl_when_key_present():
-    crawler = build_company_crawler(firecrawl_api_key="key")
+    crawler = build_company_crawler("firecrawl", firecrawl_api_key="key")
     assert isinstance(crawler, FirecrawlCrawler)
+
+
+def test_local_crawler_extracts_real_text_from_raw_html():
+    """Deterministic, no network: proves trafilatura extraction itself
+    works correctly, independent of any live site being reachable."""
+    import trafilatura
+
+    html = """
+    <html><body>
+    <nav>Home About Contact</nav>
+    <article>
+    <h1>Acme Corp</h1>
+    <p>Acme Corp builds reliable distributed systems for enterprise customers.
+    Our flagship product reduces latency by 40 percent across global regions.</p>
+    </article>
+    <footer>Copyright 2026</footer>
+    </body></html>
+    """
+    extracted = trafilatura.extract(html, include_comments=False, include_tables=False)
+    assert extracted is not None
+    assert "Acme Corp builds reliable distributed systems" in extracted
+    assert "Copyright" not in extracted  # footer noise correctly stripped
