@@ -6,6 +6,7 @@ from app.providers.ai_selector import build_ai_provider
 from app.providers.company_crawler import build_company_crawler
 from app.providers.profile_provider import ManualProvider
 from app.providers.search_provider import build_search_provider
+from app.services.identity_resolution import find_identity_candidates
 from app.stages.base import StageContext, StageName
 from app.stages.impl import (
     AnalyseActivityStage,
@@ -39,6 +40,41 @@ def create_run(
     run.company = company
     run.pasted_text = pasted_text
     return run
+
+
+async def check_identity_ambiguity(run: Run) -> bool:
+    """For name+company intake with no direct URL/pasted text, search for
+    candidate LinkedIn profiles. If more than one plausible match exists,
+    pause the run for explicit user selection rather than guessing.
+    Returns True if the run was paused (status set to
+    needs_identity_selection), False if it's safe to proceed automatically
+    (0 or 1 candidate)."""
+    if run.linkedin_url or run.pasted_text or not run.company:
+        return False
+
+    search = build_search_provider(
+        settings.search_provider, settings.tavily_api_key or None, settings.searxng_base_url or None
+    )
+    candidates = await find_identity_candidates(run.full_name, run.company, search)
+
+    if len(candidates) <= 1:
+        if candidates:
+            run.linkedin_url = candidates[0].linkedin_url
+        return False
+
+    run.status = "needs_identity_selection"
+    run.identity_candidates = [
+        {"linkedin_url": c.linkedin_url, "title": c.title, "snippet": c.snippet} for c in candidates
+    ]
+    return True
+
+
+def select_identity(run: Run, linkedin_url: str) -> None:
+    """Explicit user selection among ambiguous candidates. Persists the
+    choice and un-pauses the run."""
+    run.linkedin_url = linkedin_url
+    run.identity_candidates = []
+    run.status = "pending"
 
 
 async def execute_run(run: Run) -> None:
