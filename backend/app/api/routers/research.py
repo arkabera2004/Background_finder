@@ -8,7 +8,7 @@ from app.core.auth import AuthenticatedUser, get_current_user
 from app.db.memory_store import run_store
 from app.schemas.research_request import ResearchRequest
 from app.services.pdf_extract import PdfExtractionError, extract_text_from_pdf
-from app.services.research_service import create_run, execute_run
+from app.services.research_service import check_identity_ambiguity, create_run, execute_run, select_identity
 
 router = APIRouter()
 
@@ -32,6 +32,7 @@ def _run_to_dict(run) -> dict:
         "brief": run.brief,
         "created_at": run.created_at.isoformat(),
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+        "identity_candidates": run.identity_candidates,
     }
 
 
@@ -47,6 +48,32 @@ async def create_research(
         company=req.company,
         pasted_text=req.pasted_text,
     )
+
+    paused = await check_identity_ambiguity(run)
+    if paused:
+        return {"run_id": run.id, "status": run.status, "identity_candidates": run.identity_candidates}
+
+    task = asyncio.create_task(execute_run(run))
+    _background_tasks[run.id] = task
+    return {"run_id": run.id, "status": run.status}
+
+
+@router.post("/runs/{run_id}/select-identity")
+async def select_run_identity(
+    run_id: str, linkedin_url: str, user: AuthenticatedUser = Depends(get_current_user)
+) -> dict:
+    run = run_store.get(run_id, owner_id=user.user_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status != "needs_identity_selection":
+        raise HTTPException(
+            status_code=409, detail=f"Run is {run.status}, not awaiting identity selection"
+        )
+    valid_urls = {c["linkedin_url"] for c in run.identity_candidates}
+    if linkedin_url not in valid_urls:
+        raise HTTPException(status_code=422, detail="linkedin_url is not one of the offered candidates")
+
+    select_identity(run, linkedin_url)
     task = asyncio.create_task(execute_run(run))
     _background_tasks[run.id] = task
     return {"run_id": run.id, "status": run.status}
