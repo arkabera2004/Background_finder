@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from app.core.config import settings
 from app.db.memory_store import Run, RunStep, run_store
+from app.providers.ai_selector import build_ai_provider
 from app.providers.company_crawler import build_company_crawler
 from app.providers.profile_provider import ManualProvider
 from app.providers.search_provider import build_search_provider
@@ -80,7 +81,7 @@ async def execute_run(run: Run) -> None:
                 settings.search_provider, settings.tavily_api_key or None, settings.searxng_base_url or None
             )
         ),
-        StageName.SYNTHESISE_BRIEF: SynthesiseBriefStage(),
+        StageName.SYNTHESISE_BRIEF: SynthesiseBriefStage(ai_provider=build_ai_provider(settings)),
     }
     pipeline = Pipeline(stages)
     ctx = StageContext(run_id=run.id, depth=run.depth)
