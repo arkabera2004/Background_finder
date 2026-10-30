@@ -72,7 +72,7 @@ async def execute_run(run: Run) -> None:
         ),
         StageName.ANALYSE_CAREER: AnalyseCareerStage(),
         StageName.RESEARCH_COMPANY: ResearchCompanyStage(
-            build_company_crawler(settings.firecrawl_api_key or None)
+            build_company_crawler(settings.extraction_provider, settings.firecrawl_api_key or None)
         ),
         StageName.ANALYSE_ACTIVITY: AnalyseActivityStage(),
         StageName.WEB_FOOTPRINT: WebFootprintStage(
