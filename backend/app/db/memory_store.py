@@ -32,13 +32,14 @@ class Run:
     linkedin_url: str | None = None
     company: str | None = None
     pasted_text: str | None = None
-    status: str = "pending"  # pending | running | completed | failed | cancelled
+    status: str = "pending"  # pending | needs_identity_selection | running | completed | failed | cancelled
     steps: dict[str, RunStep] = field(default_factory=dict)
     brief: dict[str, Any] | None = None
     sources: list[dict[str, Any]] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: datetime | None = None
     cancel_requested: bool = False
+    identity_candidates: list[dict[str, Any]] = field(default_factory=list)
 
 
 class RunStore:
