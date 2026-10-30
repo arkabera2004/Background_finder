@@ -1,7 +1,13 @@
 import pytest
 
 from app.providers.company_crawler import FirecrawlCrawler, NullCrawler, build_company_crawler
-from app.providers.search_provider import NullSearchProvider, TavilyProvider, build_search_provider
+from app.providers.search_provider import (
+    DuckDuckGoProvider,
+    NullSearchProvider,
+    SearXNGProvider,
+    TavilyProvider,
+    build_search_provider,
+)
 
 
 @pytest.mark.asyncio
@@ -18,14 +24,44 @@ async def test_null_crawler_returns_empty_not_fake_pages():
     assert pages == []
 
 
-def test_build_search_provider_falls_back_to_null_without_key():
-    provider = build_search_provider(tavily_api_key=None)
+def test_build_search_provider_defaults_to_duckduckgo():
+    provider = build_search_provider("duckduckgo")
+    assert isinstance(provider, DuckDuckGoProvider)
+
+
+def test_build_search_provider_tavily_falls_back_to_null_without_key():
+    provider = build_search_provider("tavily", tavily_api_key=None)
     assert isinstance(provider, NullSearchProvider)
 
 
 def test_build_search_provider_uses_tavily_when_key_present():
-    provider = build_search_provider(tavily_api_key="key")
+    provider = build_search_provider("tavily", tavily_api_key="key")
     assert isinstance(provider, TavilyProvider)
+
+
+def test_build_search_provider_searxng_falls_back_to_null_without_url():
+    provider = build_search_provider("searxng", searxng_base_url=None)
+    assert isinstance(provider, NullSearchProvider)
+
+
+def test_build_search_provider_uses_searxng_when_url_present():
+    provider = build_search_provider("searxng", searxng_base_url="http://localhost:8080")
+    assert isinstance(provider, SearXNGProvider)
+
+
+@pytest.mark.asyncio
+async def test_duckduckgo_search_is_live_and_returns_real_urls():
+    """Real, live, keyless search — no mock. If this fails in an offline
+    sandbox, that's a real network limitation, not a code defect; the
+    provider must not fabricate results in that case (see below)."""
+    provider = DuckDuckGoProvider()
+    try:
+        results = await provider.search("Python programming language", max_results=3)
+    except RuntimeError:
+        pytest.skip("No network access in this environment")
+        return
+    assert len(results) > 0
+    assert all(r.url.startswith("http") for r in results)
 
 
 def test_build_crawler_falls_back_to_null_without_key():
