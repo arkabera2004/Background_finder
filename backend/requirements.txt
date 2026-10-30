@@ -17,3 +17,4 @@ python-multipart==0.0.20
 ddgs==9.16.1
 trafilatura==1.12.2
 beautifulsoup4==4.12.3
+sqlalchemy==2.1.6
