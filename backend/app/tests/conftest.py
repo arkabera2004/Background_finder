@@ -14,3 +14,5 @@ def _no_live_network_by_default(monkeypatch):
     """
     monkeypatch.setattr(settings, "search_provider", "tavily")
     monkeypatch.setattr(settings, "tavily_api_key", "")
+    monkeypatch.setattr(settings, "extraction_provider", "firecrawl")
+    monkeypatch.setattr(settings, "firecrawl_api_key", "")
