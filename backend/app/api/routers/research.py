@@ -1,6 +1,8 @@
 import asyncio
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 
 from app.core.auth import AuthenticatedUser, get_current_user
 from app.db.memory_store import run_store
@@ -82,6 +84,36 @@ async def get_run(run_id: str, user: AuthenticatedUser = Depends(get_current_use
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
     return _run_to_dict(run)
+
+
+@router.get("/runs/{run_id}/events")
+async def stream_run_events(
+    run_id: str, user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Polling-based SSE: emits the run's current state every 300ms until
+    it reaches a terminal status. Real Supabase Realtime/Redis pub-sub
+    push-based events are NOT_STARTED (no infra running); this polls the
+    same in-memory store GET /runs/{run_id} reads, so it's truthful, just
+    not push-based."""
+    run = run_store.get(run_id, owner_id=user.user_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    async def event_stream():
+        last_payload = None
+        while True:
+            current = run_store.get(run_id, owner_id=user.user_id)
+            if current is None:
+                break
+            payload = json.dumps(_run_to_dict(current))
+            if payload != last_payload:
+                yield f"data: {payload}\n\n"
+                last_payload = payload
+            if current.status in ("completed", "failed", "cancelled"):
+                break
+            await asyncio.sleep(0.3)
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.post("/runs/{run_id}/retry")
