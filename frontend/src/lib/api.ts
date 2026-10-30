@@ -71,6 +71,15 @@ export interface Prospect {
   brief: Record<string, unknown> | null;
 }
 
+export interface Company {
+  id: string;
+  name: string;
+  domain: string | null;
+  data: Record<string, unknown>;
+  crawled_at: string | null;
+  created_at: string;
+}
+
 export type ExportFormat = "json" | "md" | "pdf";
 
 export const api = {
@@ -110,5 +119,17 @@ export const api = {
     if (!res.ok) throw new ApiError(res.status, await res.text());
     const blob = await res.blob();
     return URL.createObjectURL(blob);
+  },
+  listCompanies: () => request<Company[]>("/companies"),
+  getCompany: (id: string) => request<Company>(`/companies/${id}`),
+  deleteCompany: async (id: string) => {
+    const supabase = createClient();
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    const res = await fetch(`${API_URL}/companies/${id}`, {
+      method: "DELETE",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new ApiError(res.status, await res.text());
   },
 };
