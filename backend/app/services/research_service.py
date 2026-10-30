@@ -68,6 +68,7 @@ async def execute_run(run: Run) -> None:
             ManualProvider(),
             linkedin_url=run.linkedin_url,
             pasted_text=run.pasted_text,
+            full_name=run.full_name or None,
         ),
         StageName.ANALYSE_CAREER: AnalyseCareerStage(),
         StageName.RESEARCH_COMPANY: ResearchCompanyStage(

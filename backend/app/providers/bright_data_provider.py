@@ -16,7 +16,9 @@ class BrightDataProvider(ProfileProvider):
     def __init__(self, api_key: str | None):
         self.api_key = api_key
 
-    async def fetch_profile(self, linkedin_url: str | None, pasted_text: str | None) -> Person:
+    async def fetch_profile(
+        self, linkedin_url: str | None, pasted_text: str | None, full_name: str | None = None
+    ) -> Person:
         if not self.api_key:
             raise ProviderUnavailableError(
                 "Bright Data provider has no API key configured (BRIGHTDATA_API_KEY)."

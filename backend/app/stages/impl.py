@@ -43,13 +43,22 @@ class ResolveIdentityStage(Stage):
 class FetchProfileStage(Stage):
     name = StageName.FETCH_PROFILE
 
-    def __init__(self, provider: ProfileProvider, linkedin_url: str | None, pasted_text: str | None):
+    def __init__(
+        self,
+        provider: ProfileProvider,
+        linkedin_url: str | None,
+        pasted_text: str | None,
+        full_name: str | None = None,
+    ):
         self.provider = provider
         self.linkedin_url = linkedin_url
         self.pasted_text = pasted_text
+        self.full_name = full_name
 
     async def run(self, ctx: StageContext) -> StageResult:
-        person = await self.provider.fetch_profile(self.linkedin_url, self.pasted_text)
+        person = await self.provider.fetch_profile(
+            self.linkedin_url, self.pasted_text, self.full_name
+        )
         ctx.outputs["_person"] = person
         return StageResult(stage=self.name, output=person.model_dump())
 

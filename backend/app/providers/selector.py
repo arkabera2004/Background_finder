@@ -17,12 +17,15 @@ def build_provider_chain(
 
 
 async def fetch_profile_with_fallback(
-    providers: list[ProfileProvider], linkedin_url: str | None, pasted_text: str | None
+    providers: list[ProfileProvider],
+    linkedin_url: str | None,
+    pasted_text: str | None,
+    full_name: str | None = None,
 ):
     last_error: Exception | None = None
     for provider in providers:
         try:
-            return await provider.fetch_profile(linkedin_url, pasted_text)
+            return await provider.fetch_profile(linkedin_url, pasted_text, full_name)
         except (ProviderUnavailableError, NotImplementedError) as exc:
             last_error = exc
             continue

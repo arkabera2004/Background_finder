@@ -11,7 +11,9 @@ class ProfileProvider(ABC):
     name: str
 
     @abstractmethod
-    async def fetch_profile(self, linkedin_url: str | None, pasted_text: str | None) -> Person: ...
+    async def fetch_profile(
+        self, linkedin_url: str | None, pasted_text: str | None, full_name: str | None = None
+    ) -> Person: ...
 
 
 class ManualProvider(ProfileProvider):
@@ -24,14 +26,19 @@ class ManualProvider(ProfileProvider):
 
     name = "manual"
 
-    async def fetch_profile(self, linkedin_url: str | None, pasted_text: str | None) -> Person:
+    async def fetch_profile(
+        self, linkedin_url: str | None, pasted_text: str | None, full_name: str | None = None
+    ) -> Person:
         if not pasted_text:
             raise ProviderUnavailableError(
                 "ManualProvider requires pasted_text; no scraping is performed."
             )
-        full_name = _guess_name_from_text(pasted_text)
+        # The user-supplied name is authoritative; only guess from the text
+        # itself when no name was explicitly given (e.g. a bare PDF export
+        # with no separate name field).
+        resolved_name = full_name.strip() if full_name else _guess_name_from_text(pasted_text)
         return Person(
-            full_name=full_name,
+            full_name=resolved_name,
             headline=_guess_headline_from_text(pasted_text),
             linkedin_url=linkedin_url,
             source=self.name,
