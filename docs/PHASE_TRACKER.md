@@ -3,50 +3,34 @@
 | Phase | Backend | Frontend | Tests | GitHub | Status |
 |---|---|---|---|---|---|
 | 0 | config, auth, /health, /me, migration SQL, worker entrypoint, docker-compose done | Next.js app, Supabase auth client/server/proxy, /login, sidebar+topbar shell, dark mode, typed API client done | 3 auth unit tests pass; tsc/eslint/build clean | all commits pushed | IMPLEMENTED, not VERIFIED (no live Supabase) |
-| 1 | input validation, pipeline orchestrator, provider abstractions (profile/search/crawler, all with honest null/manual fallbacks), 7 real stage implementations, research service, POST /research, GET /runs/{id}, SSE events, cancel, retry, PDF upload+extraction | New Research form (3 intake methods) and run detail page (live polling, retry/cancel, brief display) wired to real backend | 67/67 backend tests pass, incl. a full end-to-end manual-mode pipeline run via real HTTP with auth, ownership isolation, and failure paths; frontend build/lint clean | all commits pushed | IMPLEMENTED in manual mode, not VERIFIED against any live provider |
-| 2 | Bright Data / PDL adapters exist as typed stubs (raise cleanly, never fabricate) pending accounts + 20-profile trial | not started | provider contract tests pass (unavailable-without-key behavior) | all commits pushed | IMPLEMENTED (manual provider only), BLOCKED (paid providers) |
-| 3 | company crawler abstraction + Firecrawl adapter + honest NullCrawler fallback; research_company stage wired | not started | null-fallback tests pass; Firecrawl path untested (no key) | all commits pushed | IMPLEMENTED (interface + fallback), BLOCKED (live crawl) |
-| 4 | activity-analysis stage operates on real Person.posts when present; Tavily search adapter + honest NullSearchProvider fallback; web_footprint stage wired | not started | null-fallback tests pass; Tavily path untested (no key) | all commits pushed | IMPLEMENTED (interface + fallback), BLOCKED (live search) |
-| 5 | ProspectBrief schema, citation validator (drops unsourced claims/hooks, never invents sources), rule-based synthesise_brief stage | run detail page renders the brief | 5 citation-validator tests + synthesis covered by pipeline integration test | all commits pushed | IMPLEMENTED (rule-based synthesis only — no Anthropic call), BLOCKED (LLM-based richer synthesis) |
-| 5 exports | NOT_STARTED | NOT_STARTED | - | - | NOT_STARTED |
-| 6 | prospects/companies CRUD, dashboard stats, settings | dashboard/prospects/companies pages still placeholder empty-states, not wired to real data (no persisted prospect/company records exist yet — only in-memory runs) | - | - | NOT_STARTED |
-| 7 | rate limiting, retention/deletion, cost tracking, Anthropic client wrapper, Ruff/mypy gating | Playwright E2E | - | - | NOT_STARTED |
+| 1 | input validation, pipeline orchestrator, 7 real stage implementations, research service, POST /research, GET /runs/{id}, SSE, cancel, retry, PDF upload+extraction | New Research form + run detail page (polling, retry/cancel, save-to-prospect) wired to real backend | 100/100 backend tests pass, incl. end-to-end manual-mode pipeline via real HTTP | all commits pushed | IMPLEMENTED in manual mode, VERIFIED via real `curl`/`uvicorn` this session (not TestClient-only) |
+| 2 | Gemini + Ollama + Anthropic AI providers behind a common interface (none wired into synthesis yet — synthesis is still rule-based); Bright Data/PDL stubs unchanged | not started | 9 AI-provider tests incl. live Ollama-unreachable check | all commits pushed | IMPLEMENTED (provider layer), BLOCKED (not yet used by synthesis; paid providers) |
+| 3 | `LocalExtractionCrawler` (trafilatura + robots.txt + domain restriction) is now the default; Firecrawl optional | not started | 12 tests incl. real trafilatura extraction on raw HTML | all commits pushed | IMPLEMENTED (free default), BLOCKED (live crawl against a real domain untested) |
+| 4 | `DuckDuckGoProvider` (free, keyless) is now the default; SearXNG optional; Tavily/Exa/Brave optional | not started | 10 tests incl. **a real live DuckDuckGo search that returned real results** | all commits pushed | IMPLEMENTED, **VERIFIED live** for DuckDuckGo search specifically |
+| 5 | ProspectBrief schema, citation validator, rule-based synthesise_brief, **JSON/Markdown/PDF export via ReportLab** | prospect detail page has working Export JSON/MD/PDF buttons | 4 export tests incl. a real ReportLab→pdfplumber round-trip | all commits pushed | IMPLEMENTED (rule-based synthesis + real exports), BLOCKED (LLM-based richer synthesis — Gemini/Ollama provider exists but isn't called from the pipeline yet) |
+| 6 | **Persistent SQLAlchemy models** (Company/Prospect/Brief) + `ProspectRepository` + `POST/GET/DELETE /prospects`; a run is never auto-saved — explicit save only | Prospects list + detail pages wired to real saved data (not placeholders); dashboard/companies still placeholder | 9 repository/API tests incl. real SQLite roundtrips, cascade delete, tenant isolation | all commits pushed | IMPLEMENTED (prospects), NOT_STARTED (companies, dashboard stats) |
+| 7 | 20-fixture eval framework with **real measured results** (not invented); rate limiting/retention/Ruff/mypy gating still absent | Playwright E2E absent | 2 eval tests, real numbers in docs/EVALUATION_RESULTS.md | all commits pushed | IMPLEMENTED (eval framework), NOT_STARTED (rate limiting, retention, E2E, deployment) |
 
-## What "IMPLEMENTED in manual mode" actually means (Phase 1)
+## This session's actual free-provider migration
 
-A real HTTP request to `POST /research` with pasted text, with no API keys
-configured anywhere, runs all seven pipeline stages for real, persists
-stage-by-stage status, and returns a brief whose only claims are either
-directly user-supplied or backed by a real source URL — enforced by the
-citation validator, not by convention. This is proven by
-`backend/app/tests/test_research_api.py::test_create_research_completes_via_pasted_text`,
-which is a real `TestClient` HTTP call, not a mock.
+- **Default AI provider is now Gemini** (free tier) via `ai_provider` config; Ollama (local, zero-cost) and Anthropic (optional premium) are peers behind one `AiProvider` interface. **Not yet wired into the synthesis stage** — `SynthesiseBriefStage` is still rule-based, not AI-written. Wiring an AI provider into synthesis is the next real piece of work, not done this session.
+- **Default search provider is now DuckDuckGo** (free, keyless) — and this was *live-verified*, not just coded: `test_duckduckgo_search_is_live_and_returns_real_urls` made a real network call and got real results.
+- **Default extraction is now local** (trafilatura + robots.txt respect + same-domain + page/timeout limits) — Firecrawl is optional, never required.
+- Discovered and fixed a real bug this way: the new free-first defaults made every existing pipeline test hit live network, which hung under rate limiting. Fixed via an autouse test fixture that isolates pipeline tests from live network while keeping the dedicated live-provider tests real.
 
-What's still missing even in manual mode: real identity disambiguation
-(multiple candidates), career insights beyond "no structured experience
-data" (manual paste doesn't produce structured `Experience` records —
-only PDF/provider-sourced profiles would), company research beyond
-"no crawler configured", and any AI-written prose (synthesis is
-template/rule-based, not Claude-generated).
+## Explicit domain decision (Part 5A)
 
-## Phases 2-4: provider pattern now consistent and real
+A completed research run is **never** automatically a saved Prospect.
+`POST /prospects {run_id}` is the only path that promotes a completed
+run's brief into a persisted `Prospect` + `Brief` row — verified by
+`test_save_prospect_from_completed_run` and
+`test_save_prospect_rejects_incomplete_run`. Deleting a Prospect cascades
+to its Briefs (tested); the originating Run is independent and unaffected.
 
-Every external integration (Bright Data, PDL, Tavily, Firecrawl) follows
-the same rule: **unconfigured = honest empty result or a typed exception,
-never fabricated data.** This was verified by tests asserting empty
-lists/exceptions, not by code comments claiming it.
+## What's still NOT_STARTED
 
-## Phase 5: exports, versioning — NOT_STARTED
-
-JSON export is trivially the brief's own `.model_dump()` (not yet exposed
-via an endpoint). Markdown and PDF export, brief versioning, and
-`docs/brief-schema.json` do not exist yet.
-
-## Phases 6-7: NOT_STARTED
-
-No prospect/company persistence beyond the in-memory run store (so no
-dashboard stats, prospect library, or company detail pages have real data
-to show — wiring them to the current run store would be dishonest, since
-runs aren't prospects). No Playwright, no 20-profile eval runner, no
-Anthropic client wrapper, no rate limiting/retention jobs, no deployment.
-See docs/KNOWN_LIMITATIONS.md for the full, current list.
+Identity candidate disambiguation (multiple search-based matches — current
+`resolve_identity` trusts the submitted identity directly), company
+persistence/dashboard stats/companies pages, Playwright E2E, rate
+limiting, retention/deletion jobs, cost tracking dashboards, Ruff/mypy as
+CI gates, and all deployment. See `docs/KNOWN_LIMITATIONS.md`.

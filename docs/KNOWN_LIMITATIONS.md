@@ -3,35 +3,42 @@
 This file is the single source of truth for what does NOT work yet. If it
 isn't listed here, check docs/PHASE_TRACKER.md before assuming it works.
 
-## No live external integrations
+## No live Supabase / paid-provider integrations
 
 Nothing has run against a real Supabase project, Anthropic API, Tavily/Exa,
-Firecrawl, Bright Data, or People Data Labs. No account/credential exists for
-any of these. Every provider adapter (Bright Data, PDL, Tavily, Firecrawl)
-is written and configuration-gated — it reads its key from settings and
-either calls the real API or raises/returns-empty when unconfigured —
-but the "calls the real API" branch has never executed, since no key
-exists to exercise it. See docs/API_INTEGRATION.md for the exact
-IMPLEMENTED/BLOCKED split per provider.
+Brave, Firecrawl, Bright Data, or People Data Labs. No account/credential
+exists for any of these — they're all optional/premium now, never required.
+See docs/API_INTEGRATION.md for the exact IMPLEMENTED/BLOCKED split.
+
+## What IS live-verified (free-first providers)
+
+- **DuckDuckGo search**: a real, live, network call in the test suite
+  (`test_duckduckgo_search_is_live_and_returns_real_urls`) returns real
+  results. This is the default `search_provider`.
+- **Local extraction** (trafilatura): verified against real raw HTML in
+  tests; not yet verified against a real live website fetch (no network
+  fetch was attempted against a real domain this session, only the
+  extraction logic itself on a crafted HTML string).
+- **Gemini/Ollama/Anthropic AI providers**: code exists and is unit-tested
+  (including live Ollama-unreachable detection), but **no AI provider is
+  called anywhere in the pipeline yet** — `SynthesiseBriefStage` is still
+  rule-based. Wiring Gemini into synthesis is the next real step.
 
 ## What's real now vs. what's still missing
 
-All seven pipeline stages are now implemented and run end-to-end in
-manual mode (pasted-text intake, no credentials) — see
-docs/PHASE_TRACKER.md for exactly what each stage does. Real HTTP
-endpoints exist: `POST /research`, `POST /research/pdf`, `GET /runs/{id}`,
-`GET /runs/{id}/events` (SSE), `/runs/{id}/cancel`, `/runs/{id}/retry`.
-The frontend's New Research form and run detail page call these for real.
+All seven pipeline stages run end-to-end in manual mode (pasted-text
+intake, zero credentials). Real HTTP endpoints exist for research
+(`POST /research`, SSE, cancel/retry) and for prospects
+(`POST/GET/DELETE /prospects`, brief export as JSON/MD/PDF). The frontend
+calls all of these for real, not against placeholder data.
 
 Still NOT_STARTED: identity candidate disambiguation (multiple matches —
 currently trusts user input directly), career insights from unstructured
 pasted text (works only when structured `Experience` data exists, which
-manual paste doesn't produce), brief exports (JSON/MD/PDF), brief
-versioning, `docs/brief-schema.json`, prospect/company persistence beyond
-the in-memory run store, dashboard/prospects/companies real data, the
-Anthropic client wrapper (synthesis today is rule-based, not AI-written),
-Playwright E2E, the 20-profile eval suite, rate limiting, retention jobs,
-and deployment.
+manual paste doesn't produce), company persistence/dashboard/companies
+pages, brief versioning beyond `version=1`, `docs/brief-schema.json`,
+AI-written synthesis, Playwright E2E, rate limiting, retention jobs, and
+deployment.
 
 ## No database has ever been touched
 
