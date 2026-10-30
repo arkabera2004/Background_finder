@@ -1,6 +1,9 @@
 import asyncio
+from typing import Callable
 
 from app.stages.base import Stage, StageContext, StageName, StageResult
+
+StageHook = Callable[[StageName, str], None]  # (stage, "started"|"completed"|"failed")
 
 
 class StageFailedError(Exception):
@@ -36,32 +39,44 @@ class Pipeline:
             raise ValueError(f"Pipeline missing required stages: {missing}")
         self.stages = stages
 
-    async def _run_stage(self, ctx: StageContext, name: StageName) -> StageResult:
+    async def _run_stage(
+        self, ctx: StageContext, name: StageName, on_event: StageHook | None
+    ) -> StageResult:
         stage = self.stages[name]
+        if on_event:
+            on_event(name, "started")
         try:
             result = await stage.run(ctx)
         except Exception as exc:  # noqa: BLE001 - re-raised as a typed pipeline error
+            if on_event:
+                on_event(name, "failed")
             raise StageFailedError(name, exc) from exc
         ctx.outputs[name.value] = result.output
         ctx.outputs[f"_sources_{name.value}"] = result.sources
+        if on_event:
+            on_event(name, "completed")
         return result
 
-    async def run(self, ctx: StageContext) -> dict[StageName, StageResult]:
+    async def run(
+        self, ctx: StageContext, on_event: StageHook | None = None
+    ) -> dict[StageName, StageResult]:
         results: dict[StageName, StageResult] = {}
 
         results[StageName.RESOLVE_IDENTITY] = await self._run_stage(
-            ctx, StageName.RESOLVE_IDENTITY
+            ctx, StageName.RESOLVE_IDENTITY, on_event
         )
-        results[StageName.FETCH_PROFILE] = await self._run_stage(ctx, StageName.FETCH_PROFILE)
+        results[StageName.FETCH_PROFILE] = await self._run_stage(
+            ctx, StageName.FETCH_PROFILE, on_event
+        )
 
         parallel_names = [n for n in PARALLEL_AFTER_FETCH if n in self.stages]
         parallel_results = await asyncio.gather(
-            *(self._run_stage(ctx, name) for name in parallel_names)
+            *(self._run_stage(ctx, name, on_event) for name in parallel_names)
         )
         for name, result in zip(parallel_names, parallel_results):
             results[name] = result
 
         results[StageName.SYNTHESISE_BRIEF] = await self._run_stage(
-            ctx, StageName.SYNTHESISE_BRIEF
+            ctx, StageName.SYNTHESISE_BRIEF, on_event
         )
         return results
