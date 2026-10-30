@@ -1,1 +1,0 @@
-reportlab==4.2.5  # test-only: generates fixture PDFs for pdf_extract tests
