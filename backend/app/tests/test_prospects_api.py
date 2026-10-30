@@ -98,6 +98,48 @@ def test_prospects_are_scoped_to_owner():
     assert client.get("/prospects", headers=headers_b).json() == []
 
 
+def test_export_brief_all_formats():
+    headers = _auth_header()
+    run_resp = client.post(
+        "/research",
+        json={"full_name": "Jane Doe", "pasted_text": "Jane Doe\nSenior Engineer " * 5},
+        headers=headers,
+    )
+    run_id = run_resp.json()["run_id"]
+    _wait_for_completion(run_id, headers)
+    save_resp = client.post("/prospects", json={"run_id": run_id}, headers=headers)
+    prospect_id = save_resp.json()["id"]
+
+    json_resp = client.get(f"/prospects/{prospect_id}/brief/export?format=json", headers=headers)
+    assert json_resp.status_code == 200
+    assert json_resp.json()["prospect_name"] == "Jane Doe"
+
+    md_resp = client.get(f"/prospects/{prospect_id}/brief/export?format=md", headers=headers)
+    assert md_resp.status_code == 200
+    assert "Jane Doe" in md_resp.text
+
+    pdf_resp = client.get(f"/prospects/{prospect_id}/brief/export?format=pdf", headers=headers)
+    assert pdf_resp.status_code == 200
+    assert pdf_resp.headers["content-type"] == "application/pdf"
+    assert pdf_resp.content[:4] == b"%PDF"
+
+
+def test_export_brief_rejects_unknown_format():
+    headers = _auth_header()
+    run_resp = client.post(
+        "/research",
+        json={"full_name": "Jane Doe", "pasted_text": "Jane Doe\nEngineer " * 10},
+        headers=headers,
+    )
+    run_id = run_resp.json()["run_id"]
+    _wait_for_completion(run_id, headers)
+    save_resp = client.post("/prospects", json={"run_id": run_id}, headers=headers)
+    prospect_id = save_resp.json()["id"]
+
+    resp = client.get(f"/prospects/{prospect_id}/brief/export?format=xml", headers=headers)
+    assert resp.status_code == 422
+
+
 def test_delete_prospect():
     headers = _auth_header()
     run_resp = client.post(
