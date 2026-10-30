@@ -19,6 +19,20 @@ async def test_manual_provider_builds_person_from_pasted_text():
 
 
 @pytest.mark.asyncio
+async def test_manual_provider_prefers_explicit_full_name_over_guessed_text():
+    """Regression: caught via a live curl request where a one-paragraph
+    paste with no name supplied produced a garbled full_name. When the
+    caller explicitly supplies full_name, it must win over any guess."""
+    provider = ManualProvider()
+    person = await provider.fetch_profile(
+        linkedin_url=None,
+        pasted_text="Jane Doe is a Senior Engineer at Acme who builds distributed systems.",
+        full_name="Jane Doe",
+    )
+    assert person.full_name == "Jane Doe"
+
+
+@pytest.mark.asyncio
 async def test_manual_provider_requires_pasted_text():
     provider = ManualProvider()
     with pytest.raises(ProviderUnavailableError):
