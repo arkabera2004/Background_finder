@@ -76,7 +76,9 @@ async def execute_run(run: Run) -> None:
         ),
         StageName.ANALYSE_ACTIVITY: AnalyseActivityStage(),
         StageName.WEB_FOOTPRINT: WebFootprintStage(
-            build_search_provider(settings.tavily_api_key or None)
+            build_search_provider(
+                settings.search_provider, settings.tavily_api_key or None, settings.searxng_base_url or None
+            )
         ),
         StageName.SYNTHESISE_BRIEF: SynthesiseBriefStage(),
     }
