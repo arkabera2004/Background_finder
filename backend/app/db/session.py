@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
 from app.db.models import Base
@@ -7,8 +8,16 @@ from app.db.models import Base
 
 def make_engine(database_url: str | None = None):
     url = database_url or settings.database_url
-    connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
-    return create_engine(url, connect_args=connect_args)
+    if not url.startswith("sqlite"):
+        return create_engine(url)
+    # SQLite-specific: :memory: needs StaticPool so every checkout shares
+    # the same connection (and thus the same tables/data) instead of each
+    # getting its own empty in-memory database.
+    is_memory = ":memory:" in url
+    kwargs = {"connect_args": {"check_same_thread": False}}
+    if is_memory:
+        kwargs["poolclass"] = StaticPool
+    return create_engine(url, **kwargs)
 
 
 engine = make_engine()
