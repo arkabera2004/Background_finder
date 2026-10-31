@@ -38,7 +38,7 @@ VALID_SOURCE = Source(id="s0", url="https://example.com/talk", title="Conference
 
 
 def _valid_brief_dict(**overrides: object) -> dict:
-    base = {
+    base: dict[str, object] = {
         "prospect_name": "Jane Doe",
         "snapshot": [
             {"text": "Senior Engineer at Acme", "source_ids": ["s0"], "confidence": "high", "is_inference": False}
