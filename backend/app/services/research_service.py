@@ -4,7 +4,7 @@ from app.core.config import settings
 from app.db.memory_store import Run, RunStep, run_store
 from app.providers.ai_selector import build_ai_provider
 from app.providers.company_crawler import build_company_crawler
-from app.providers.profile_provider import ManualProvider
+from app.providers.selector import ChainedProfileProvider
 from app.providers.search_provider import build_search_provider
 from app.services.identity_resolution import find_identity_candidates
 from app.stages.base import StageContext, StageName
@@ -102,7 +102,7 @@ async def execute_run(run: Run) -> None:
             company=run.company,
         ),
         StageName.FETCH_PROFILE: FetchProfileStage(
-            ManualProvider(),
+            ChainedProfileProvider(settings.bright_data_api_key or None, settings.pdl_api_key or None),
             linkedin_url=run.linkedin_url,
             pasted_text=run.pasted_text,
             full_name=run.full_name or None,

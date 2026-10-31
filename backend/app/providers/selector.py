@@ -32,3 +32,19 @@ async def fetch_profile_with_fallback(
     raise ProviderUnavailableError(
         f"All providers in the chain failed; last error: {last_error}"
     )
+
+
+class ChainedProfileProvider(ProfileProvider):
+    """Adapts the provider chain to the single-provider ProfileProvider
+    interface FetchProfileStage expects, so the stage itself needs no
+    changes to use paid providers with a manual-paste fallback."""
+
+    name = "chained"
+
+    def __init__(self, bright_data_api_key: str | None, pdl_api_key: str | None):
+        self._chain = build_provider_chain(bright_data_api_key, pdl_api_key)
+
+    async def fetch_profile(
+        self, linkedin_url: str | None, pasted_text: str | None, full_name: str | None = None
+    ):
+        return await fetch_profile_with_fallback(self._chain, linkedin_url, pasted_text, full_name)
