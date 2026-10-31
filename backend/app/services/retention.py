@@ -8,14 +8,15 @@ originating Run — retention never touches Prospects or Briefs.
 
 from datetime import datetime, timedelta, timezone
 
+from app.core.config import settings
 from app.db.memory_store import RunStore
 
-RETENTION_DAYS = 90
 
-
-def purge_expired_runs(run_store: RunStore, days: int = RETENTION_DAYS) -> int:
-    """Delete Runs older than `days`. Returns the number deleted."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+def purge_expired_runs(run_store: RunStore, days: int | None = None) -> int:
+    """Delete Runs older than `days` (defaults to settings.default_retention_days).
+    Returns the number deleted."""
+    effective_days = days if days is not None else settings.default_retention_days
+    cutoff = datetime.now(timezone.utc) - timedelta(days=effective_days)
     expired = [r.id for r in run_store.list_all() if r.created_at < cutoff]
     for run_id in expired:
         run_store.delete(run_id)

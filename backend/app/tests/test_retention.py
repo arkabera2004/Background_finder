@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
+from app.core.config import settings
 from app.db.memory_store import RunStore
 from app.services.retention import purge_expired_runs
 
@@ -49,3 +50,14 @@ def test_purges_across_owners():
     deleted = purge_expired_runs(store, days=90)
 
     assert deleted == 2
+
+
+def test_default_days_comes_from_settings(monkeypatch):
+    monkeypatch.setattr(settings, "default_retention_days", 5)
+    store = RunStore()
+    run = store.create(owner_id="user-1", depth="standard")
+    run.created_at = datetime.now(timezone.utc) - timedelta(days=6)
+
+    deleted = purge_expired_runs(store)  # no explicit days passed
+
+    assert deleted == 1
