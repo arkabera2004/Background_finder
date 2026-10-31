@@ -29,33 +29,88 @@ class NullCrawler(CompanyCrawler):
         return []
 
 
+class FirecrawlJobError(RuntimeError):
+    """The Firecrawl crawl job failed, timed out, or returned something the
+    app can't parse. Raised rather than returning an empty page list, so a
+    crawl failure is visible instead of silently looking like "no sources"."""
+
+
 class FirecrawlCrawler(CompanyCrawler):
-    """BLOCKED: requires FIRECRAWL_API_KEY. Not called without one."""
+    """BLOCKED: requires FIRECRAWL_API_KEY. Not called without one.
+
+    POST /v1/crawl starts an async job (returns a job id, not pages); the
+    result must be fetched by polling GET /v1/crawl/{id} until status is
+    "completed" or "failed". See https://docs.firecrawl.dev/api-reference/endpoint/crawl-get
+    """
 
     name = "firecrawl"
 
-    def __init__(self, api_key: str):
+    def __init__(
+        self,
+        api_key: str,
+        poll_interval_seconds: float = 2.0,
+        timeout_seconds: float = 60.0,
+    ):
         self.api_key = api_key
+        self.poll_interval_seconds = poll_interval_seconds
+        self.timeout_seconds = timeout_seconds
 
     async def crawl(self, domain: str, max_pages: int = 15) -> list[CrawledPage]:
+        import asyncio
+
         import httpx
 
+        headers = {"Authorization": f"Bearer {self.api_key}"}
         async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
+            start_resp = await client.post(
                 "https://api.firecrawl.dev/v1/crawl",
-                headers={"Authorization": f"Bearer {self.api_key}"},
+                headers=headers,
                 json={"url": f"https://{domain}", "limit": max_pages},
             )
-            resp.raise_for_status()
-            data = resp.json()
-        return [
-            CrawledPage(
-                url=p.get("url", domain),
-                title=p.get("metadata", {}).get("title"),
-                text=p.get("markdown", ""),
-            )
-            for p in data.get("data", [])[:max_pages]
-        ]
+            if start_resp.status_code != 200:
+                raise FirecrawlJobError(
+                    f"Firecrawl crawl submission failed: {start_resp.status_code} {start_resp.text}"
+                )
+            start_data = start_resp.json()
+            job_id = start_data.get("id")
+            if not job_id:
+                raise FirecrawlJobError(f"Firecrawl crawl response missing job id: {start_data}")
+
+            elapsed = 0.0
+            while True:
+                status_resp = await client.get(
+                    f"https://api.firecrawl.dev/v1/crawl/{job_id}", headers=headers
+                )
+                if status_resp.status_code != 200:
+                    raise FirecrawlJobError(
+                        f"Firecrawl crawl status check failed: {status_resp.status_code} {status_resp.text}"
+                    )
+                status_data = status_resp.json()
+                status = status_data.get("status")
+
+                if status == "completed":
+                    return [
+                        CrawledPage(
+                            url=p.get("url") or p.get("metadata", {}).get("sourceURL", domain),
+                            title=p.get("metadata", {}).get("title"),
+                            text=p.get("markdown", ""),
+                        )
+                        for p in status_data.get("data", [])[:max_pages]
+                    ]
+                if status == "failed":
+                    raise FirecrawlJobError(f"Firecrawl crawl job {job_id} failed: {status_data}")
+                if status is None:
+                    raise FirecrawlJobError(
+                        f"Firecrawl crawl status response missing 'status': {status_data}"
+                    )
+
+                if elapsed >= self.timeout_seconds:
+                    raise FirecrawlJobError(
+                        f"Firecrawl crawl job {job_id} timed out after {self.timeout_seconds}s "
+                        f"(last status: {status})"
+                    )
+                await asyncio.sleep(self.poll_interval_seconds)
+                elapsed += self.poll_interval_seconds
 
 
 class LocalExtractionCrawler(CompanyCrawler):
