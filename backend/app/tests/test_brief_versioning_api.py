@@ -115,3 +115,41 @@ def test_get_brief_version_not_found():
     response = client.get(f"/prospects/{prospect_id}/briefs/999", headers=headers)
 
     assert response.status_code == 404
+
+
+def test_list_brief_versions_cross_owner_returns_404():
+    session = _test_session_factory()
+    repo = ProspectRepository(session)
+
+    prospect = repo.save_from_run(
+        owner_id="owner-a",
+        full_name="Jane Doe",
+        linkedin_url=None,
+        run_id="run-1",
+        brief_data={"prospect_name": "Jane Doe"},
+    )
+    prospect_id = prospect.id
+    session.close()
+
+    response = client.get(f"/prospects/{prospect_id}/briefs", headers=_auth_header("owner-b"))
+
+    assert response.status_code == 404
+
+
+def test_get_brief_version_cross_owner_returns_404():
+    session = _test_session_factory()
+    repo = ProspectRepository(session)
+
+    prospect = repo.save_from_run(
+        owner_id="owner-a",
+        full_name="Jane Doe",
+        linkedin_url=None,
+        run_id="run-1",
+        brief_data={"prospect_name": "Jane Doe"},
+    )
+    prospect_id = prospect.id
+    session.close()
+
+    response = client.get(f"/prospects/{prospect_id}/briefs/1", headers=_auth_header("owner-b"))
+
+    assert response.status_code == 404

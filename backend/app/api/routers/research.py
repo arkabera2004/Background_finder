@@ -8,6 +8,7 @@ from app.core.auth import AuthenticatedUser, get_current_user
 from app.db.memory_store import run_store
 from app.schemas.research_request import ResearchRequest
 from app.services.pdf_extract import PdfExtractionError, extract_text_from_pdf
+from app.services.rate_limit import RateLimitExceededError, check_research_rate_limit
 from app.services.research_service import check_identity_ambiguity, create_run, execute_run, select_identity
 
 router = APIRouter()
@@ -40,6 +41,11 @@ def _run_to_dict(run) -> dict:
 async def create_research(
     req: ResearchRequest, user: AuthenticatedUser = Depends(get_current_user)
 ) -> dict:
+    try:
+        check_research_rate_limit(run_store, user.user_id)
+    except RateLimitExceededError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+
     run = create_run(
         owner_id=user.user_id,
         depth=req.depth,
@@ -86,6 +92,11 @@ async def create_research_from_pdf(
     depth: str = "standard",
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict:
+    try:
+        check_research_rate_limit(run_store, user.user_id)
+    except RateLimitExceededError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+
     data = await file.read()
     try:
         text = extract_text_from_pdf(data)

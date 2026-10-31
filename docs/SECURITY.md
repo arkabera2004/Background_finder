@@ -18,11 +18,30 @@
   caste, politics, sexuality, or family circumstances — there is no
   inference logic written yet at all (Phase 4/5 not started).
 
+## Rate limiting
+
+`POST /research` and `POST /research/pdf` enforce a 30-runs/24h cap per
+`owner_id` (`app/services/rate_limit.py`), checked against the existing
+run store (no separate counter) and returning HTTP 429 over the limit.
+Tested with 4 unit tests + 1 HTTP test
+(`test_create_research_rate_limited_after_daily_cap`). Not yet implemented:
+a concurrent-run cap, and this is in-process memory — it resets on restart
+and isn't shared across multiple backend processes.
+
+## Tenant isolation
+
+Every company/prospect/brief/run endpoint filters by `owner_id` at the
+repository layer. Cross-owner access returns 404 (not 403, to avoid
+confirming the resource exists) — verified by HTTP tests for companies
+(`test_get_company_cross_owner_returns_404`,
+`test_delete_company_cross_owner_returns_404`), prospects, and brief
+versions (`test_get_brief_version_cross_owner_returns_404`).
+
 ## Not yet implemented
 
-Rate limiting (30 runs/day, 3 concurrent), audit logging, retention/deletion
-jobs, input sanitization for crawled/uploaded content, CORS lockdown beyond
-localhost, secret rotation. All Phase 7 scope.
+Audit logging, retention/deletion jobs, input sanitization for
+crawled/uploaded content, CORS lockdown beyond localhost, secret rotation.
+Phase 7 scope.
 
 ## Compliance
 

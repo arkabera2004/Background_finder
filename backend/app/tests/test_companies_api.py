@@ -86,6 +86,32 @@ def test_get_company_returns_single_company():
     assert company["domain"] == "acme.com"
 
 
+def test_get_company_cross_owner_returns_404():
+    session = _test_session_factory()
+    repo = CompanyRepository(session)
+    c = repo.get_or_create("owner-a", "Acme", "acme.com")
+    company_id = c.id
+    session.commit()
+
+    response = client.get(f"/companies/{company_id}", headers=_auth_header("owner-b"))
+
+    assert response.status_code == 404
+
+
+def test_delete_company_cross_owner_returns_404():
+    session = _test_session_factory()
+    repo = CompanyRepository(session)
+    c = repo.get_or_create("owner-a", "Acme", "acme.com")
+    company_id = c.id
+    session.commit()
+
+    response = client.delete(f"/companies/{company_id}", headers=_auth_header("owner-b"))
+
+    assert response.status_code == 404
+    # confirm it wasn't actually deleted
+    assert client.get(f"/companies/{company_id}", headers=_auth_header("owner-a")).status_code == 200
+
+
 def test_delete_company():
     headers = _auth_header()
     session = _test_session_factory()

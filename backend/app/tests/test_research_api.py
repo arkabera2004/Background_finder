@@ -95,6 +95,21 @@ def test_retry_requires_failed_status():
     assert retry_resp.status_code == 409
 
 
+def test_create_research_rate_limited_after_daily_cap():
+    from app.db.memory_store import run_store
+
+    headers = _auth_header("rate-limited-user")
+    for _ in range(30):
+        run_store.create(owner_id="rate-limited-user", depth="standard")
+
+    resp = client.post(
+        "/research",
+        json={"full_name": "Jane Doe", "pasted_text": "Jane Doe\nEngineer " * 10},
+        headers=headers,
+    )
+    assert resp.status_code == 429
+
+
 def test_create_research_fails_for_url_only_without_provider():
     headers = _auth_header()
     resp = client.post(
