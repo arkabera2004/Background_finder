@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { api, ApiError, type ResearchDepth } from "@/lib/api";
+import { api, ApiError, NetworkError, type ResearchDepth } from "@/lib/api";
 
 type IntakeMethod = "url" | "name_company" | "paste";
 
@@ -35,21 +35,29 @@ export default function NewResearchPage() {
     },
   });
 
-  const errorMessage =
-    mutation.error instanceof ApiError
-      ? (() => {
-          try {
-            const parsed = JSON.parse(mutation.error.message);
-            return Array.isArray(parsed.detail)
-              ? parsed.detail.map((d: { msg: string }) => d.msg).join(", ")
-              : parsed.detail ?? mutation.error.message;
-          } catch {
-            return mutation.error.message;
-          }
-        })()
-      : mutation.error
-        ? "Something went wrong submitting this research request."
-        : null;
+  const errorMessage = (() => {
+    const err = mutation.error;
+    if (!err) return null;
+    if (err instanceof NetworkError) return err.message;
+    if (err instanceof ApiError) {
+      if (err.status === 401) return "Your session has expired. Please sign in again.";
+      if (err.status === 429) return "You've hit the research rate limit. Please try again later.";
+      if (err.status >= 500) {
+        console.error("Research submission failed:", err.status, err.message);
+        return "The server had a problem starting this research. Please try again in a moment.";
+      }
+      try {
+        const parsed = JSON.parse(err.message);
+        return Array.isArray(parsed.detail)
+          ? parsed.detail.map((d: { msg: string }) => d.msg).join(", ")
+          : parsed.detail ?? err.message;
+      } catch {
+        return err.message;
+      }
+    }
+    console.error("Unexpected research submission error:", err);
+    return "Something went wrong submitting this research request.";
+  })();
 
   return (
     <div className="max-w-xl space-y-6">

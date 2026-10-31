@@ -109,6 +109,23 @@ def test_create_research_rate_limited_after_daily_cap():
     assert resp.status_code == 429
 
 
+def test_create_research_surfaces_identity_search_failure_as_502(monkeypatch):
+    import app.api.routers.research as research_router
+
+    async def _boom(run):
+        raise ConnectionError("search provider unreachable")
+
+    monkeypatch.setattr(research_router, "check_identity_ambiguity", _boom)
+
+    resp = client.post(
+        "/research",
+        json={"full_name": "Jane Doe", "company": "Acme"},
+        headers=_auth_header("identity-search-failure-user"),
+    )
+    assert resp.status_code == 502
+    assert "search provider" in resp.json()["detail"].lower()
+
+
 def test_create_research_fails_for_url_only_without_provider():
     headers = _auth_header()
     resp = client.post(

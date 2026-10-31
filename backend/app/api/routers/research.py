@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -10,6 +11,8 @@ from app.schemas.research_request import ResearchRequest
 from app.services.pdf_extract import PdfExtractionError, extract_text_from_pdf
 from app.services.rate_limit import RateLimitExceededError, check_research_rate_limit
 from app.services.research_service import check_identity_ambiguity, create_run, execute_run, select_identity
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -55,7 +58,16 @@ async def create_research(
         pasted_text=req.pasted_text,
     )
 
-    paused = await check_identity_ambiguity(run)
+    try:
+        paused = await check_identity_ambiguity(run)
+    except Exception as exc:
+        logger.exception("Identity search failed for run %s", run.id)
+        run_store.delete(run.id)
+        raise HTTPException(
+            status_code=502,
+            detail="Could not reach the search provider to resolve this person's identity. "
+            "Please try again, or provide a LinkedIn URL directly.",
+        ) from exc
     if paused:
         return {"run_id": run.id, "status": run.status, "identity_candidates": run.identity_candidates}
 

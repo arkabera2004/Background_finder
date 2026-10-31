@@ -8,19 +8,49 @@ export class ApiError extends Error {
   }
 }
 
+export type NetworkErrorKind = "timeout" | "network";
+
+export class NetworkError extends Error {
+  constructor(public kind: NetworkErrorKind, message: string) {
+    super(message);
+  }
+}
+
+const REQUEST_TIMEOUT_MS = 20_000;
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const supabase = createClient();
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
 
-  const res = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init?.headers,
-    },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...init?.headers,
+      },
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new NetworkError("timeout", "The request timed out. Please try again.");
+    }
+    // A plain fetch rejection here (not an ApiError) means the request never reached
+    // the server as an HTTP response — most commonly a CORS block or the backend
+    // being unreachable, not a backend-side error.
+    throw new NetworkError(
+      "network",
+      "Could not reach the server. Check your connection and that the backend is running."
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!res.ok) {
     throw new ApiError(res.status, await res.text());
