@@ -2,8 +2,8 @@
 every caller asks for a structured completion and gets back typed, costed,
 usage-tracked output regardless of which provider answers it.
 
-Free-first: Gemini's free tier and local Ollama are first-class, not
-afterthoughts. Anthropic is an optional premium provider (see
+Free-first: Gemini's free tier is first-class, not an afterthought.
+Anthropic is an optional premium provider (see
 app/providers/anthropic_provider.py) and is never required for the Free
 Basic Plan — app/core/config.py's `ai_provider` setting picks which one
 is active, so switching is a config change, not a code change.
@@ -18,7 +18,7 @@ class AiProviderError(Exception):
 
 
 class AiProviderUnavailableError(AiProviderError):
-    """No credentials configured / provider unreachable (e.g. Ollama not running)."""
+    """No credentials configured or the provider is unreachable."""
 
 
 class AiRateLimitError(AiProviderError):

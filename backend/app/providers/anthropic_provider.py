@@ -16,7 +16,7 @@ from app.providers.ai_provider import (
 )
 
 # Approximate Claude Haiku pricing per the published rate card; update if it
-# changes. Not used for Gemini-free-tier or Ollama paths.
+# changes. Not used for the Gemini free-tier path.
 ANTHROPIC_INPUT_COST_PER_TOKEN_USD = 0.0000008
 ANTHROPIC_OUTPUT_COST_PER_TOKEN_USD = 0.000004
 
