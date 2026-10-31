@@ -14,7 +14,7 @@ from app.providers.profile_provider import ProfileProvider
 from app.providers.search_provider import SearchProvider
 from app.schemas.brief import Source
 from app.services.ai_brief_synthesizer import rule_based_synthesis, synthesize_with_ai
-from app.services.career_analysis import analyse_career
+from app.services.career_analysis import analyse_career, build_career_timeline
 from app.services.company_discovery import discover_company_domain
 from app.stages.base import Stage, StageContext, StageName, StageResult
 
@@ -74,12 +74,27 @@ class AnalyseCareerStage(Stage):
 
     async def run(self, ctx: StageContext) -> StageResult:
         person = ctx.outputs.get("_person")
+        ctx.outputs.setdefault(
+            "_profile_source",
+            {
+                "id": "profile",
+                "url": (getattr(person, "linkedin_url", None) or "manual-entry")
+                if person is not None
+                else "manual-entry",
+                "source_type": "social_profile",
+            },
+        )
         if person is None or not person.experiences:
             return StageResult(
                 stage=self.name,
-                output={"total_months_experience": 0, "note": "no structured experience data"},
+                output={
+                    "total_months_experience": 0,
+                    "note": "no structured experience data",
+                    "career_timeline": [],
+                },
             )
         insights = analyse_career(person.experiences)
+        career_timeline = build_career_timeline(person.experiences, profile_source_id="profile")
         return StageResult(
             stage=self.name,
             output={
@@ -87,6 +102,7 @@ class AnalyseCareerStage(Stage):
                 "gaps_months": insights.gaps_months,
                 "company_switches": insights.company_switches,
                 "current_role_months": insights.current_role_months,
+                "career_timeline": career_timeline,
             },
         )
 

@@ -3,6 +3,7 @@ import pytest
 from app.providers.company_crawler import NullCrawler
 from app.providers.profile_provider import ManualProvider
 from app.providers.search_provider import NullSearchProvider
+from app.schemas.profile import Experience, Person
 from app.stages.base import StageContext, StageName
 from app.stages.impl import (
     AnalyseActivityStage,
@@ -14,6 +15,32 @@ from app.stages.impl import (
     WebFootprintStage,
 )
 from app.stages.pipeline import Pipeline
+
+
+@pytest.mark.asyncio
+async def test_analyse_career_stage_produces_career_timeline_and_profile_source():
+    person = Person(
+        full_name="Jane Doe",
+        linkedin_url="https://linkedin.com/in/janedoe",
+        experiences=[
+            Experience(title="Eng", company="A", start_date="2018-01", end_date="2019-01"),
+            Experience(title="Sr Eng", company="B", start_date="2019-06", end_date=None),
+        ],
+        source="manual",
+    )
+    ctx = StageContext(run_id="r1", depth="standard")
+    ctx.outputs["_person"] = person
+
+    result = await AnalyseCareerStage().run(ctx)
+
+    assert len(result.output["career_timeline"]) == 2
+    assert result.output["career_timeline"][0]["organization"] == "A"
+    assert result.output["career_timeline"][0]["source_ids"] == ["profile"]
+    assert ctx.outputs["_profile_source"] == {
+        "id": "profile",
+        "url": "https://linkedin.com/in/janedoe",
+        "source_type": "social_profile",
+    }
 
 
 @pytest.mark.asyncio

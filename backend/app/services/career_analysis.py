@@ -67,3 +67,25 @@ def analyse_career(experiences: list[Experience], today: date | None = None) -> 
         company_switches=switches,
         current_role_months=current_role_months,
     )
+
+
+def build_career_timeline(
+    experiences: list[Experience], profile_source_id: str
+) -> list[dict]:
+    """Map self-reported profile experiences into CareerEntry-shaped dicts.
+
+    Confidence is always "medium" — this is self-reported profile data,
+    not independently verified against another source.
+    """
+    return [
+        {
+            "organization": exp.company,
+            "title": exp.title,
+            "start_date": exp.start_date,
+            "end_date": exp.end_date,
+            "description": exp.description,
+            "source_ids": [profile_source_id],
+            "confidence": "medium",
+        }
+        for exp in experiences
+    ]
