@@ -62,5 +62,11 @@ class RunStore:
     def list_for_owner(self, owner_id: str) -> list[Run]:
         return [r for r in self._runs.values() if r.owner_id == owner_id]
 
+    def list_all(self) -> list[Run]:
+        return list(self._runs.values())
+
+    def delete(self, run_id: str) -> bool:
+        return self._runs.pop(run_id, None) is not None
+
 
 run_store = RunStore()

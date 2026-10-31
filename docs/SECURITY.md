@@ -37,11 +37,26 @@ confirming the resource exists) — verified by HTTP tests for companies
 `test_delete_company_cross_owner_returns_404`), prospects, and brief
 versions (`test_get_brief_version_cross_owner_returns_404`).
 
+## Retention
+
+`app/services/retention.py` deletes research Runs older than 90 days;
+wired as a daily ARQ cron job (`run_retention_sweep`, 03:00) in
+`app/workers/main.py`. Scope is Runs only — a saved Prospect is a
+separate, user-initiated record that retention never touches (see the
+file's docstring). 4 unit tests cover the cutoff boundary and multi-owner
+batches.
+
+**Known limitation**: `run_store` is in-process memory, so the worker
+process and the API process do not actually share state yet — this cron
+job is correct code against the interface it will use once Runs move to
+Postgres, but it cannot delete anything in the current single-process
+deployment where the worker never sees the API's runs. Honest status:
+IMPLEMENTED, NOT YET EFFECTIVE until Runs are persisted to a shared store.
+
 ## Not yet implemented
 
-Audit logging, retention/deletion jobs, input sanitization for
-crawled/uploaded content, CORS lockdown beyond localhost, secret rotation.
-Phase 7 scope.
+Audit logging, input sanitization for crawled/uploaded content, CORS
+lockdown beyond localhost, secret rotation. Phase 7 scope.
 
 ## Compliance
 
