@@ -28,7 +28,7 @@ async def test_full_pipeline_runs_end_to_end_in_manual_mode_without_any_credenti
             pasted_text="Jane Doe\nSenior Engineer at Acme\nBuilds reliable systems.",
         ),
         StageName.ANALYSE_CAREER: AnalyseCareerStage(),
-        StageName.RESEARCH_COMPANY: ResearchCompanyStage(NullCrawler()),
+        StageName.RESEARCH_COMPANY: ResearchCompanyStage(NullCrawler(), search=NullSearchProvider()),
         StageName.ANALYSE_ACTIVITY: AnalyseActivityStage(),
         StageName.WEB_FOOTPRINT: WebFootprintStage(NullSearchProvider()),
         StageName.SYNTHESISE_BRIEF: SynthesiseBriefStage(),
@@ -90,7 +90,7 @@ async def test_full_pipeline_uses_ai_synthesis_when_provider_configured():
             ManualProvider(), linkedin_url=None, pasted_text="Jane Doe\nEngineer at Acme"
         ),
         StageName.ANALYSE_CAREER: AnalyseCareerStage(),
-        StageName.RESEARCH_COMPANY: ResearchCompanyStage(NullCrawler()),
+        StageName.RESEARCH_COMPANY: ResearchCompanyStage(NullCrawler(), search=NullSearchProvider()),
         StageName.ANALYSE_ACTIVITY: AnalyseActivityStage(),
         StageName.WEB_FOOTPRINT: WebFootprintStage(NullSearchProvider()),
         StageName.SYNTHESISE_BRIEF: SynthesiseBriefStage(ai_provider=FakeAiProvider()),
@@ -104,3 +104,59 @@ async def test_full_pipeline_uses_ai_synthesis_when_provider_configured():
     assert brief["_synthesis_metadata"]["synthesis_method"] == "ai"
     assert brief["_synthesis_metadata"]["provider"] == "fake"
     assert brief["_synthesis_metadata"]["estimated_cost_usd"] == 0.0001
+
+
+class _FakeSearchProvider:
+    name = "fake"
+
+    def __init__(self, results):
+        self._results = results
+
+    async def search(self, query: str, max_results: int = 10):
+        return self._results
+
+
+@pytest.mark.asyncio
+async def test_research_company_stage_uses_discovered_domain_when_confident():
+    from app.providers.search_provider import SearchResult
+    from app.schemas.profile import Person
+
+    search = _FakeSearchProvider(
+        [
+            SearchResult(
+                url="https://acmerobotics.com/about",
+                title="Acme Robotics - Official Website",
+                snippet="Acme Robotics builds industrial robots.",
+            )
+        ]
+    )
+    stage = ResearchCompanyStage(NullCrawler(), search=search)
+    ctx = StageContext(run_id="r1", depth="standard")
+    ctx.outputs["_person"] = Person(
+        full_name="Jane Doe", current_company="Acme Robotics", source="manual"
+    )
+
+    result = await stage.run(ctx)
+
+    assert result.output["domain_guess"] == "acmerobotics.com"
+
+
+@pytest.mark.asyncio
+async def test_research_company_stage_reports_gap_when_no_confident_match():
+    from app.schemas.profile import Person
+
+    search = _FakeSearchProvider([])
+    stage = ResearchCompanyStage(NullCrawler(), search=search)
+    ctx = StageContext(run_id="r2", depth="standard")
+    ctx.outputs["_person"] = Person(
+        full_name="Jane Doe", current_company="Acme Robotics", source="manual"
+    )
+
+    result = await stage.run(ctx)
+
+    assert result.output["domain_guess"] is None
+    assert result.output["pages_crawled"] == 0
+    assert result.sources == []
+    assert result.output["gaps"] == [
+        "Could not confidently identify Acme Robotics's official website"
+    ]

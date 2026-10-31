@@ -95,6 +95,9 @@ async def execute_run(run: Run) -> None:
             step.status = "failed"
             step.completed_at = now
 
+    search_provider = build_search_provider(
+        settings.search_provider, settings.tavily_api_key or None, settings.searxng_base_url or None
+    )
     stages = {
         StageName.RESOLVE_IDENTITY: ResolveIdentityStage(
             full_name=run.full_name,
@@ -109,14 +112,11 @@ async def execute_run(run: Run) -> None:
         ),
         StageName.ANALYSE_CAREER: AnalyseCareerStage(),
         StageName.RESEARCH_COMPANY: ResearchCompanyStage(
-            build_company_crawler(settings.extraction_provider, settings.firecrawl_api_key or None)
+            build_company_crawler(settings.extraction_provider, settings.firecrawl_api_key or None),
+            search=search_provider,
         ),
         StageName.ANALYSE_ACTIVITY: AnalyseActivityStage(),
-        StageName.WEB_FOOTPRINT: WebFootprintStage(
-            build_search_provider(
-                settings.search_provider, settings.tavily_api_key or None, settings.searxng_base_url or None
-            )
-        ),
+        StageName.WEB_FOOTPRINT: WebFootprintStage(search_provider),
         StageName.SYNTHESISE_BRIEF: SynthesiseBriefStage(ai_provider=build_ai_provider(settings)),
     }
     pipeline = Pipeline(stages)

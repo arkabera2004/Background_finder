@@ -15,6 +15,7 @@ from app.providers.search_provider import SearchProvider
 from app.schemas.brief import Source
 from app.services.ai_brief_synthesizer import rule_based_synthesis, synthesize_with_ai
 from app.services.career_analysis import analyse_career
+from app.services.company_discovery import discover_company_domain
 from app.stages.base import Stage, StageContext, StageName, StageResult
 
 logger = logging.getLogger(__name__)
@@ -93,8 +94,9 @@ class AnalyseCareerStage(Stage):
 class ResearchCompanyStage(Stage):
     name = StageName.RESEARCH_COMPANY
 
-    def __init__(self, crawler: CompanyCrawler):
+    def __init__(self, crawler: CompanyCrawler, search: SearchProvider):
         self.crawler = crawler
+        self.search = search
 
     async def run(self, ctx: StageContext) -> StageResult:
         person = ctx.outputs.get("_person")
@@ -102,7 +104,18 @@ class ResearchCompanyStage(Stage):
         if not company:
             return StageResult(stage=self.name, output={"company": None, "pages_crawled": 0})
 
-        domain = company.lower().replace(" ", "") + ".com"  # best-effort guess, not verified
+        domain = await discover_company_domain(self.search, company)
+        if domain is None:
+            return StageResult(
+                stage=self.name,
+                output={
+                    "company": company,
+                    "domain_guess": None,
+                    "pages_crawled": 0,
+                    "gaps": [f"Could not confidently identify {company}'s official website"],
+                },
+                sources=[],
+            )
         pages = await self.crawler.crawl(domain)
         sources = [
             {"url": p.url, "title": p.title, "excerpt": p.text[:280]} for p in pages
