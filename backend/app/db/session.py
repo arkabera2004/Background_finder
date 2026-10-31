@@ -1,3 +1,5 @@
+from typing import Any
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -14,7 +16,7 @@ def make_engine(database_url: str | None = None):
     # the same connection (and thus the same tables/data) instead of each
     # getting its own empty in-memory database.
     is_memory = ":memory:" in url
-    kwargs = {"connect_args": {"check_same_thread": False}}
+    kwargs: dict[str, Any] = {"connect_args": {"check_same_thread": False}}
     if is_memory:
         kwargs["poolclass"] = StaticPool
     return create_engine(url, **kwargs)

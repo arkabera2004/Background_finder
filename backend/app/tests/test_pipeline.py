@@ -24,7 +24,7 @@ class RecordingStage(Stage):
 
 
 def make_pipeline(log: list[str], delay: float = 0.05) -> Pipeline:
-    stages = {
+    stages: dict[StageName, Stage] = {
         StageName.RESOLVE_IDENTITY: RecordingStage(StageName.RESOLVE_IDENTITY, log),
         StageName.FETCH_PROFILE: RecordingStage(StageName.FETCH_PROFILE, log),
         StageName.ANALYSE_CAREER: RecordingStage(StageName.ANALYSE_CAREER, log, delay=delay),
@@ -73,7 +73,7 @@ async def test_middle_stages_run_concurrently_not_sequentially():
 @pytest.mark.asyncio
 async def test_stage_failure_raises_typed_error():
     log: list[str] = []
-    stages = {
+    stages: dict[StageName, Stage] = {
         StageName.RESOLVE_IDENTITY: RecordingStage(StageName.RESOLVE_IDENTITY, log),
         StageName.FETCH_PROFILE: RecordingStage(StageName.FETCH_PROFILE, log, fail=True),
         StageName.SYNTHESISE_BRIEF: RecordingStage(StageName.SYNTHESISE_BRIEF, log),

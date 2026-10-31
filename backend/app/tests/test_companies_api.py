@@ -51,8 +51,8 @@ def test_list_companies_returns_user_companies():
     headers = _auth_header()
     session = _test_session_factory()
     repo = CompanyRepository(session)
-    c1 = repo.get_or_create("test-user", "Acme", "acme.com")
-    c2 = repo.get_or_create("test-user", "TechCorp", "techcorp.com")
+    repo.get_or_create("test-user", "Acme", "acme.com")
+    repo.get_or_create("test-user", "TechCorp", "techcorp.com")
     session.commit()
 
     response = client.get("/companies", headers=headers)

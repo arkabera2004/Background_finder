@@ -1,7 +1,6 @@
 import pytest
 from sqlalchemy.orm import sessionmaker
 
-from app.db.models import Brief
 from app.db.prospect_repository import ProspectRepository
 from app.db.session import init_db, make_engine
 
