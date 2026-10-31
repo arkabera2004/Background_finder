@@ -6,16 +6,19 @@ No Vercel, Railway, Render, or Supabase project exists for this app. This
 document is a checklist for when deployment is authorized — nothing below
 has been purchased, provisioned, or deployed.
 
-## Local Docker parity (verified this session)
+## Local Docker parity (partially checked this session)
 
 `docker-compose.yml` defines `redis` + `api` (FastAPI/uvicorn) + `worker`
 (ARQ). It requires `backend/.env` to exist (copy from `.env.example`) —
 `env_file:` fails hard if the file is missing, which was undocumented
-before this session. `backend/Dockerfile` builds a `python:3.12-slim`
-image installing `requirements.txt`. Running `docker build ./backend`
-locally is the extent of verification here — no container was deployed
-anywhere, and `docker compose up` was not exercised end-to-end against
-real Redis/Postgres this session.
+before this session; confirmed via `docker compose config`, which also
+confirmed the compose file's structure/env mapping is valid. Attempting
+`docker build ./backend` and `docker version` in this session's sandbox
+hung indefinitely (even `pgrep dockerd` hung) — this looks like a sandbox
+restriction on the Docker socket, not a real build problem, but it means
+the actual image build was **not verified** this session. Don't treat
+`backend/Dockerfile` as confirmed-working until a real `docker build` has
+been run somewhere with Docker socket access.
 
 ## `.env.example` is now complete
 
