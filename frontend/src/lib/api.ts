@@ -52,11 +52,24 @@ export interface RunStepView {
 
 export type Confidence = "high" | "medium" | "low";
 
+export type SourceType =
+  | "company_website"
+  | "company_news"
+  | "news_article"
+  | "social_profile"
+  | "social_post"
+  | "other";
+
 export interface BriefSource {
   id: string;
   url: string;
   title: string | null;
   excerpt: string | null;
+  publisher: string | null;
+  source_type: SourceType;
+  published_at: string | null;
+  retrieved_at: string | null;
+  confidence: Confidence;
 }
 
 export interface BriefClaim {
@@ -64,12 +77,63 @@ export interface BriefClaim {
   source_ids: string[];
   confidence: Confidence;
   is_inference: boolean;
+  date: string | null;
 }
 
-export interface BriefHook {
-  text: string;
+export interface CareerEntry {
+  organization: string;
+  title: string;
+  start_date: string | null;
+  end_date: string | null;
+  description: string | null;
   source_ids: string[];
   confidence: Confidence;
+}
+
+export type ActivityType =
+  | "original_post"
+  | "repost_or_share"
+  | "comment"
+  | "article_or_publication"
+  | "interview_or_podcast"
+  | "talk_or_presentation"
+  | "professional_announcement"
+  | "other_public_activity";
+
+export interface ActivityItem {
+  activity_type: ActivityType;
+  topic: string;
+  summary: string;
+  url: string;
+  published_at: string | null;
+  authored_by_person: boolean;
+  relevance: string | null;
+  confidence: Confidence;
+  source_ids: string[];
+}
+
+export interface PersonalizationHook {
+  evidence: string;
+  relevance: string;
+  outreach_angle: string;
+  source_ids: string[];
+  confidence: Confidence;
+}
+
+export interface OutreachStrategy {
+  angle: string | null;
+  primary_hooks: string[];
+  question_or_value_prop: string | null;
+  opening_approach: string | null;
+  avoid: string[];
+}
+
+export interface ResearchGaps {
+  missing_information: string[];
+  limited_coverage_areas: string[];
+  conflicting_information: string[];
+  unverified_claims: string[];
+  inaccessible_sources: string[];
 }
 
 export interface SynthesisMetadata {
@@ -84,15 +148,19 @@ export interface SynthesisMetadata {
 export interface ProspectBrief {
   prospect_name: string;
   snapshot: BriefClaim[];
-  career_story: BriefClaim[];
   current_role: BriefClaim[];
-  company: BriefClaim[];
-  content_and_interests: BriefClaim[];
+  company_overview: BriefClaim[];
+  career_timeline: CareerEntry[];
+  expertise: BriefClaim[];
+  activity: ActivityItem[];
+  recurring_themes: BriefClaim[];
+  company_context: BriefClaim[];
   communication_style: BriefClaim[];
-  hooks: BriefHook[];
   likely_priorities: BriefClaim[];
-  dos_and_donts: string[];
+  personalization_hooks: PersonalizationHook[];
+  outreach_strategy: OutreachStrategy;
   sources: BriefSource[];
+  research_gaps: ResearchGaps;
   _synthesis_metadata?: SynthesisMetadata;
 }
 
