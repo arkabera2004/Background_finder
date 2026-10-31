@@ -19,26 +19,26 @@ See docs/API_INTEGRATION.md for the exact IMPLEMENTED/BLOCKED split.
   tests; not yet verified against a real live website fetch (no network
   fetch was attempted against a real domain this session, only the
   extraction logic itself on a crafted HTML string).
-- **Gemini/Ollama/Anthropic AI providers**: code exists and is unit-tested
-  (including live Ollama-unreachable detection), but **no AI provider is
-  called anywhere in the pipeline yet** — `SynthesiseBriefStage` is still
-  rule-based. Wiring Gemini into synthesis is the next real step.
+- **Gemini/Ollama/Anthropic AI providers**: `SynthesiseBriefStage` tries
+  the configured provider first (Gemini default), retries once on invalid
+  JSON, then falls back to rule-based synthesis on any failure. Tested with
+  a fake provider only — no real Gemini API key or live Ollama instance has
+  been exercised this session.
 
 ## What's real now vs. what's still missing
 
 All seven pipeline stages run end-to-end in manual mode (pasted-text
 intake, zero credentials). Real HTTP endpoints exist for research
-(`POST /research`, SSE, cancel/retry) and for prospects
-(`POST/GET/DELETE /prospects`, brief export as JSON/MD/PDF). The frontend
-calls all of these for real, not against placeholder data.
+(`POST /research`, SSE, cancel/retry), identity disambiguation
+(`needs_identity_selection` + `POST /runs/{id}/select-identity`), prospects
+(`POST/GET/DELETE /prospects`, brief export as JSON/MD/PDF, version history
+via `GET /prospects/{id}/briefs[/{version}]`), and companies
+(`GET /companies[/{id}]`, `DELETE /companies/{id}`). The frontend calls all
+of these for real, including the Companies and Dashboard pages (no longer
+placeholders).
 
-Still NOT_STARTED: identity candidate disambiguation (multiple matches —
-currently trusts user input directly), career insights from unstructured
-pasted text (works only when structured `Experience` data exists, which
-manual paste doesn't produce), company persistence/dashboard/companies
-pages, brief versioning beyond `version=1`, `docs/brief-schema.json`,
-AI-written synthesis, Playwright E2E, rate limiting, retention jobs, and
-deployment.
+Still NOT_STARTED: Playwright E2E, rate limiting, retention/deletion jobs,
+Ruff/mypy as CI gates, and all deployment.
 
 ## No database has ever been touched
 
