@@ -295,30 +295,41 @@ class SynthesiseBriefStage(Stage):
         for stage_name in (
             StageName.RESEARCH_COMPANY.value,
             StageName.WEB_FOOTPRINT.value,
+            StageName.ANALYSE_ACTIVITY.value,
         ):
             sources_raw.extend(ctx.outputs.get(f"_sources_{stage_name}", []))
 
+        profile_source = ctx.outputs.get("_profile_source")
+        if profile_source is not None:
+            sources_raw.append(profile_source)
+
         sources = [
-            Source(id=f"s{i}", url=s["url"], title=s.get("title"), excerpt=s.get("excerpt"))
+            Source(
+                id=s.get("id") or f"s{i}",
+                url=s["url"],
+                title=s.get("title"),
+                excerpt=s.get("excerpt"),
+            )
             for i, s in enumerate(sources_raw)
             if s.get("url")
         ]
 
         career = ctx.outputs.get(StageName.ANALYSE_CAREER.value, {})
+        activity = ctx.outputs.get(StageName.ANALYSE_ACTIVITY.value, {}).get("activity", [])
 
         brief = None
         metadata = None
         if self.ai_provider is not None:
             try:
                 brief, metadata = await synthesize_with_ai(
-                    self.ai_provider, person_data or {}, career, sources
+                    self.ai_provider, person_data or {}, career, activity, sources
                 )
             except Exception as exc:  # noqa: BLE001 - any AI failure falls back honestly
                 logger.warning("AI synthesis failed, falling back to rule-based: %s", exc)
                 brief, metadata = None, None
 
         if brief is None:
-            brief, metadata = rule_based_synthesis(person_data, career, sources)
+            brief, metadata = rule_based_synthesis(person_data, career, activity, sources)
 
         output = brief.model_dump()
         output["_synthesis_metadata"] = metadata

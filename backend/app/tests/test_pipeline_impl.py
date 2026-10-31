@@ -44,6 +44,40 @@ async def test_analyse_career_stage_produces_career_timeline_and_profile_source(
 
 
 @pytest.mark.asyncio
+async def test_synthesise_brief_stage_wires_career_activity_and_profile_source():
+    person = Person(
+        full_name="Jane Doe",
+        linkedin_url="https://linkedin.com/in/janedoe",
+        experiences=[
+            Experience(title="Eng", company="A", start_date="2018-01", end_date="2019-01"),
+        ],
+        posts=[Post(text="Excited to announce our new product launch!", is_repost=False)],
+        source="manual",
+    )
+    ctx = StageContext(run_id="r-wiring", depth="standard")
+    ctx.outputs["_person"] = person
+
+    career_result = await AnalyseCareerStage().run(ctx)
+    ctx.outputs[StageName.ANALYSE_CAREER.value] = career_result.output
+    ctx.outputs[f"_sources_{StageName.ANALYSE_CAREER.value}"] = career_result.sources
+
+    activity_result = await AnalyseActivityStage().run(ctx)
+    ctx.outputs[StageName.ANALYSE_ACTIVITY.value] = activity_result.output
+    ctx.outputs[f"_sources_{StageName.ANALYSE_ACTIVITY.value}"] = activity_result.sources
+
+    ctx.outputs[f"_sources_{StageName.RESEARCH_COMPANY.value}"] = []
+    ctx.outputs[f"_sources_{StageName.WEB_FOOTPRINT.value}"] = []
+
+    result = await SynthesiseBriefStage().run(ctx)
+    brief = result.output
+
+    assert len(brief["career_timeline"]) == 1
+    assert len(brief["activity"]) == 1
+    profile_source = ctx.outputs["_profile_source"]
+    assert any(s["id"] == profile_source["id"] for s in brief["sources"])
+
+
+@pytest.mark.asyncio
 async def test_full_pipeline_runs_end_to_end_in_manual_mode_without_any_credentials():
     stages = {
         StageName.RESOLVE_IDENTITY: ResolveIdentityStage(
@@ -68,9 +102,9 @@ async def test_full_pipeline_runs_end_to_end_in_manual_mode_without_any_credenti
     brief = results[StageName.SYNTHESISE_BRIEF].output
     assert brief["prospect_name"] == "Jane Doe"
     assert len(brief["snapshot"]) == 1
-    # No search/crawler => no web sources => no hooks fabricated.
-    assert brief["sources"] == []
-    assert brief["hooks"] == []
+    # No search/crawler => no web sources, only the synthetic profile source.
+    assert [s["id"] for s in brief["sources"]] == ["profile"]
+    assert brief["personalization_hooks"] == []
     # No AI provider was passed to SynthesiseBriefStage => must be honest
     # that rule-based synthesis ran, never claim AI synthesis happened.
     assert brief["_synthesis_metadata"]["synthesis_method"] == "rule_based"
@@ -91,14 +125,18 @@ async def test_full_pipeline_uses_ai_synthesis_when_provider_configured():
                     {
                         "prospect_name": "Jane Doe",
                         "snapshot": [],
-                        "career_story": [],
                         "current_role": [],
-                        "company": [],
-                        "content_and_interests": [],
+                        "company_overview": [],
+                        "career_timeline": [],
+                        "expertise": [],
+                        "activity": [],
+                        "recurring_themes": [],
+                        "company_context": [],
                         "communication_style": [],
                         "likely_priorities": [],
-                        "hooks": [],
-                        "dos_and_donts": [],
+                        "personalization_hooks": [],
+                        "outreach_strategy": {"angle": None},
+                        "research_gaps": {"missing_information": []},
                     }
                 ),
                 model="fake-model",
