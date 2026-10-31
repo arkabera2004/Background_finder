@@ -66,3 +66,36 @@ a real Postgres/Supabase instance. RLS policies are unverified.
 Login, the auth-redirect proxy, and `/me` integration pass type-checking,
 linting, and a production build with placeholder env vars, but have never
 been exercised against a real Supabase project or a running backend.
+
+## Research-depth and brief-structure rewrite (research-depth-and-brief-structure plan) — fixture-tested only
+
+The structured career timeline, 8-type activity classification, company
+domain discovery via search, deepened company research, the rewritten
+Gemini synthesis prompt/schema and matching rule-based fallback, and the
+full 12-section `BriefView` frontend re-render are all TESTED WITH
+FIXTURES (fake AI provider, fake search/crawler providers) only. None of
+it has been run against a real `GEMINI_API_KEY`, a real Supabase project,
+or live DuckDuckGo beyond the pre-existing `test_duckduckgo_search_is_live_and_returns_real_urls`
+test — same caveat as the rest of this file. Do not read passing fixture
+tests for this work as proof it behaves correctly against a real Gemini
+response or real crawled company data.
+
+## Two pre-existing, out-of-scope infra gaps (confirmed still present, not newly introduced)
+
+- **16 mypy stub-package errors**: `mypy app` (whole-package, no
+  `--ignore-missing-imports`) reports 16 `import-untyped` errors, all for
+  missing type stubs for `jose`, `jsonschema`, `reportlab`, and
+  `trafilatura`. These predate the research-depth-and-brief-structure plan
+  (present at base commit `2174d27`, before any task in it landed) and
+  are out of scope for it — fixing them would mean adding new
+  dependencies (`types-python-jose`, `types-jsonschema`, etc.), which is a
+  separate decision. CI's actual gate, `mypy app main.py
+  --ignore-missing-imports`, passes with 0 errors.
+- **1 pre-existing frontend tsc error** on `src/app/layout.tsx` (`Cannot
+  find name 'LayoutProps'`) was noted as pre-existing in earlier sessions
+  of this plan. It did not reproduce in this session's `npx tsc --noEmit`
+  run (0 errors) — Next.js's generated ambient route-prop type was already
+  present in this worktree's `.next` build output from an earlier `next
+  build`. This is a known quirk of Next.js's typed-routes codegen (the
+  type only exists after a build has run at least once), not a fix made
+  to the app; it is not tracked as resolved by this plan.
