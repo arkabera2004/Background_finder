@@ -16,8 +16,10 @@ class FakeAiProvider:
     def __init__(self, responses: list[str]):
         self._responses = responses
         self.calls = 0
+        self.last_timeout_seconds: float | None = None
 
     async def complete(self, prompt: str, *, max_tokens: int = 1024, timeout_seconds: float = 30.0):
+        self.last_timeout_seconds = timeout_seconds
         response_text = self._responses[self.calls]
         self.calls += 1
         return Completion(
@@ -95,6 +97,19 @@ async def test_ai_synthesis_drops_claim_with_fabricated_source_id():
     brief, _ = await synthesize_with_ai(provider, {"full_name": "Jane Doe"}, {}, [VALID_SOURCE])
 
     assert brief.snapshot == []  # fabricated-citation claim dropped
+
+
+@pytest.mark.asyncio
+async def test_ai_synthesis_uses_a_generous_timeout():
+    """Regression: a real live call against gemini-3.8-flash (a "thinking"
+    model) timed out in session with the provider's 30s default — a
+    structured-JSON synthesis prompt routinely takes over a minute. This
+    must request a timeout well above that default, not rely on it."""
+    provider = FakeAiProvider([VALID_RESPONSE])
+    await synthesize_with_ai(provider, {"full_name": "Jane Doe"}, {}, [VALID_SOURCE])
+
+    assert provider.last_timeout_seconds is not None
+    assert provider.last_timeout_seconds >= 60.0
 
 
 @pytest.mark.asyncio

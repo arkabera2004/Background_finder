@@ -6,6 +6,8 @@ provider isn't configured. See docs/KNOWN_LIMITATIONS.md for exactly which
 stages are data-limited without Tavily/Firecrawl/Bright Data/PDL/Anthropic.
 """
 
+import logging
+
 from app.providers.ai_provider import AiProvider
 from app.providers.company_crawler import CompanyCrawler
 from app.providers.profile_provider import ProfileProvider
@@ -14,6 +16,8 @@ from app.schemas.brief import Source
 from app.services.ai_brief_synthesizer import rule_based_synthesis, synthesize_with_ai
 from app.services.career_analysis import analyse_career
 from app.stages.base import Stage, StageContext, StageName, StageResult
+
+logger = logging.getLogger(__name__)
 
 
 class ResolveIdentityStage(Stage):
@@ -186,7 +190,8 @@ class SynthesiseBriefStage(Stage):
                 brief, metadata = await synthesize_with_ai(
                     self.ai_provider, person_data or {}, career, sources
                 )
-            except Exception:  # noqa: BLE001 - any AI failure falls back honestly
+            except Exception as exc:  # noqa: BLE001 - any AI failure falls back honestly
+                logger.warning("AI synthesis failed, falling back to rule-based: %s", exc)
                 brief, metadata = None, None
 
         if brief is None:

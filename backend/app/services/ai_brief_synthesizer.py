@@ -77,7 +77,15 @@ async def synthesize_with_ai(
 
     last_error: Exception | None = None
     for attempt in range(2):  # one retry on invalid structured output
-        completion = await provider.complete(prompt, max_tokens=2048)
+        # "Thinking" models (e.g. gemini-3.8-flash) spend part of max_tokens
+        # on internal reasoning before the visible JSON — confirmed live,
+        # 2048 tokens was ~1800 thinking + a truncated, invalid-JSON
+        # remainder, every single call. 8192 leaves real room for both the
+        # model's reasoning and a full multi-section brief. Timeout matches:
+        # a structured-JSON synthesis prompt on a thinking model routinely
+        # takes over a minute; the provider's 30s default was timing out
+        # every real call here, not just slow ones.
+        completion = await provider.complete(prompt, max_tokens=8192, timeout_seconds=120.0)
         try:
             raw = _extract_json(completion.text)
             raw["sources"] = [s.model_dump() for s in sources]  # never trust model-echoed sources

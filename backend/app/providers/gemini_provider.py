@@ -1,9 +1,14 @@
 """Google Gemini provider — free tier is the default AI path for the Basic Plan.
 
 https://ai.google.dev/gemini-api/docs — the free tier (as of this writing)
-covers gemini-2.0-flash and similar models at generous per-minute/per-day
+covers gemini-3.8-flash and similar models at generous per-minute/per-day
 limits for development use. Model name is configurable
-(GEMINI_MODEL, default "gemini-2.0-flash") — never hardcoded elsewhere.
+(GEMINI_MODEL, default "gemini-3.8-flash") — never hardcoded elsewhere.
+
+gemini-3.8-flash and later "thinking" models can spend the entire
+maxOutputTokens budget on internal reasoning and return a candidate with
+no `content.parts` at all (`finishReason: "MAX_TOKENS"`). That's treated
+as an empty, not malformed, response below — not a KeyError.
 """
 
 import asyncio
@@ -31,7 +36,7 @@ GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 class GeminiProvider(AiProvider):
     name = "gemini"
 
-    def __init__(self, api_key: str, model: str = "gemini-2.0-flash", max_retries: int = 2):
+    def __init__(self, api_key: str, model: str = "gemini-3.8-flash", max_retries: int = 2):
         self.api_key = api_key
         self.model = model
         self.max_retries = max_retries
@@ -70,7 +75,18 @@ class GeminiProvider(AiProvider):
         else:
             raise last_exc or AiProviderError("Gemini request failed after retries")
 
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        candidates = data.get("candidates") or []
+        if not candidates:
+            raise AiProviderError(f"Gemini returned no candidates: {data}")
+        parts = candidates[0].get("content", {}).get("parts")
+        if not parts:
+            finish_reason = candidates[0].get("finishReason", "unknown")
+            raise AiProviderError(
+                f"Gemini returned no content (finishReason={finish_reason}); "
+                "the model may have used its entire token budget on internal "
+                "reasoning — retry with a larger max_tokens."
+            )
+        text = parts[0].get("text", "")
         usage_meta = data.get("usageMetadata", {})
         input_tokens = usage_meta.get("promptTokenCount", 0)
         output_tokens = usage_meta.get("candidatesTokenCount", 0)
