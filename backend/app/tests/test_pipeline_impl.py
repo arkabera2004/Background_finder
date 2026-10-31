@@ -17,6 +17,16 @@ from app.stages.impl import (
 from app.stages.pipeline import Pipeline
 
 
+@pytest.fixture(autouse=True)
+def _safe_dns(monkeypatch):
+    """Company-domain SSRF hardening resolves hostnames via socket.gethostbyname
+    before crawling; stub it to a safe public IP so these pipeline tests
+    don't depend on real DNS for made-up test domains like acmerobotics.com."""
+    from app.services import company_discovery
+
+    monkeypatch.setattr(company_discovery.socket, "gethostbyname", lambda host: "93.184.216.34")
+
+
 @pytest.mark.asyncio
 async def test_analyse_career_stage_produces_career_timeline_and_profile_source():
     person = Person(
@@ -75,6 +85,104 @@ async def test_synthesise_brief_stage_wires_career_activity_and_profile_source()
     assert len(brief["activity"]) == 1
     profile_source = ctx.outputs["_profile_source"]
     assert any(s["id"] == profile_source["id"] for s in brief["sources"])
+
+
+@pytest.mark.asyncio
+async def test_synthesise_brief_stage_merges_activity_from_web_footprint_and_analyse_activity():
+    ctx = StageContext(run_id="r-merge", depth="standard")
+    ctx.outputs["_person"] = None
+    ctx.outputs[StageName.ANALYSE_ACTIVITY.value] = {
+        "activity": [
+            {
+                "activity_type": "original_post",
+                "topic": "post topic",
+                "summary": "a post",
+                "url": "https://posts.example/1",
+                "published_at": None,
+                "authored_by_person": True,
+                "relevance": None,
+                "confidence": "medium",
+                "source_ids": ["profile"],
+            }
+        ]
+    }
+    ctx.outputs[StageName.WEB_FOOTPRINT.value] = {
+        "activity": [
+            {
+                "activity_type": "interview_or_podcast",
+                "topic": "footprint topic",
+                "summary": "an interview",
+                "url": "https://footprint.example/1",
+                "published_at": None,
+                "authored_by_person": True,
+                "relevance": None,
+                "confidence": "medium",
+                "source_ids": [],
+            }
+        ]
+    }
+    ctx.outputs[f"_sources_{StageName.RESEARCH_COMPANY.value}"] = []
+    ctx.outputs[f"_sources_{StageName.WEB_FOOTPRINT.value}"] = []
+    ctx.outputs[f"_sources_{StageName.ANALYSE_ACTIVITY.value}"] = []
+
+    result = await SynthesiseBriefStage().run(ctx)
+    brief = result.output
+
+    urls = {a["url"] for a in brief["activity"]}
+    assert "https://posts.example/1" in urls
+    assert "https://footprint.example/1" in urls
+    assert len(brief["activity"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_synthesise_brief_stage_preserves_source_type_metadata():
+    ctx = StageContext(run_id="r-source-type", depth="standard")
+    ctx.outputs["_person"] = None
+    ctx.outputs[StageName.ANALYSE_ACTIVITY.value] = {"activity": []}
+    ctx.outputs[StageName.WEB_FOOTPRINT.value] = {"activity": []}
+    ctx.outputs[f"_sources_{StageName.RESEARCH_COMPANY.value}"] = [
+        {
+            "id": "news-1",
+            "url": "https://techcrunch.com/acme-news",
+            "title": "Acme raises funding",
+            "excerpt": "...",
+            "source_type": "company_news",
+            "publisher": "TechCrunch",
+            "published_at": "2026-01-01",
+        }
+    ]
+    ctx.outputs[f"_sources_{StageName.WEB_FOOTPRINT.value}"] = []
+    ctx.outputs[f"_sources_{StageName.ANALYSE_ACTIVITY.value}"] = []
+
+    result = await SynthesiseBriefStage().run(ctx)
+    brief = result.output
+
+    source = next(s for s in brief["sources"] if s["url"] == "https://techcrunch.com/acme-news")
+    assert source["source_type"] == "company_news"
+    assert source["publisher"] == "TechCrunch"
+    assert source["published_at"] == "2026-01-01"
+
+
+@pytest.mark.asyncio
+async def test_synthesise_brief_stage_folds_company_gap_into_research_gaps():
+    ctx = StageContext(run_id="r-gap", depth="standard")
+    ctx.outputs["_person"] = None
+    ctx.outputs[StageName.ANALYSE_ACTIVITY.value] = {"activity": []}
+    ctx.outputs[StageName.WEB_FOOTPRINT.value] = {"activity": []}
+    ctx.outputs[StageName.RESEARCH_COMPANY.value] = {
+        "gaps": ["Could not confidently identify Acme Robotics's official website"]
+    }
+    ctx.outputs[f"_sources_{StageName.RESEARCH_COMPANY.value}"] = []
+    ctx.outputs[f"_sources_{StageName.WEB_FOOTPRINT.value}"] = []
+    ctx.outputs[f"_sources_{StageName.ANALYSE_ACTIVITY.value}"] = []
+
+    result = await SynthesiseBriefStage().run(ctx)
+    brief = result.output
+
+    assert (
+        "Could not confidently identify Acme Robotics's official website"
+        in brief["research_gaps"]["missing_information"]
+    )
 
 
 @pytest.mark.asyncio

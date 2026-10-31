@@ -309,27 +309,59 @@ class SynthesiseBriefStage(Stage):
                 url=s["url"],
                 title=s.get("title"),
                 excerpt=s.get("excerpt"),
+                source_type=s.get("source_type", "other"),
+                publisher=s.get("publisher"),
+                published_at=s.get("published_at"),
             )
             for i, s in enumerate(sources_raw)
             if s.get("url")
         ]
 
         career = ctx.outputs.get(StageName.ANALYSE_CAREER.value, {})
-        activity = ctx.outputs.get(StageName.ANALYSE_ACTIVITY.value, {}).get("activity", [])
+
+        # Merge classified activity from both ANALYSE_ACTIVITY (profile posts)
+        # and WEB_FOOTPRINT (search-discovered activity) — both stages
+        # produce real classified activity items, dedupe by URL so overlap
+        # between the two doesn't double-count.
+        activity_from_posts = ctx.outputs.get(StageName.ANALYSE_ACTIVITY.value, {}).get(
+            "activity", []
+        )
+        activity_from_footprint = ctx.outputs.get(StageName.WEB_FOOTPRINT.value, {}).get(
+            "activity", []
+        )
+        activity: list[dict] = []
+        seen_activity_urls: set[str] = set()
+        for item in [*activity_from_posts, *activity_from_footprint]:
+            url = item.get("url")
+            if url and url in seen_activity_urls:
+                continue
+            if url:
+                seen_activity_urls.add(url)
+            activity.append(item)
+
+        company_gaps = list(ctx.outputs.get(StageName.RESEARCH_COMPANY.value, {}).get("gaps", []))
 
         brief = None
         metadata = None
         if self.ai_provider is not None:
             try:
                 brief, metadata = await synthesize_with_ai(
-                    self.ai_provider, person_data or {}, career, activity, sources
+                    self.ai_provider, person_data or {}, career, activity, sources, company_gaps
                 )
             except Exception as exc:  # noqa: BLE001 - any AI failure falls back honestly
                 logger.warning("AI synthesis failed, falling back to rule-based: %s", exc)
                 brief, metadata = None, None
 
         if brief is None:
-            brief, metadata = rule_based_synthesis(person_data, career, activity, sources)
+            brief, metadata = rule_based_synthesis(
+                person_data, career, activity, sources, company_gaps
+            )
+        elif company_gaps:
+            # Safety net: even on the AI path, make sure company-research
+            # gaps survive verbatim, in case the model dropped them.
+            for gap in company_gaps:
+                if gap not in brief.research_gaps.missing_information:
+                    brief.research_gaps.missing_information.append(gap)
 
         output = brief.model_dump()
         output["_synthesis_metadata"] = metadata

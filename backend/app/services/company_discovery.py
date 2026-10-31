@@ -7,12 +7,33 @@ the result plausibly matches the company name. `None` means "no confident
 match": callers must not fall back to guessing.
 """
 
+import ipaddress
 import re
+import socket
 from urllib.parse import urlparse
 
 from app.providers.search_provider import SearchProvider
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
+
+# Generic business words that don't distinguish one company from another —
+# a match on only these would confidently crawl the wrong company's site.
+_GENERIC_TOKENS = {
+    "inc",
+    "llc",
+    "corp",
+    "the",
+    "company",
+    "group",
+    "solutions",
+    "systems",
+    "co",
+    "ltd",
+    "limited",
+    "holdings",
+    "international",
+    "global",
+}
 
 
 def _tokens(text: str) -> set[str]:
@@ -21,10 +42,25 @@ def _tokens(text: str) -> set[str]:
 
 def _plausible_match(company_name: str, title: str | None, snippet: str | None) -> bool:
     company_tokens = _tokens(company_name)
-    if not company_tokens:
+    distinctive_tokens = company_tokens - _GENERIC_TOKENS
+    if not distinctive_tokens:
         return False
     candidate_tokens = _tokens(f"{title or ''} {snippet or ''}")
-    return bool(company_tokens & candidate_tokens)
+    return bool(distinctive_tokens & candidate_tokens)
+
+
+def _is_safe_host(hostname: str) -> bool:
+    """Reject hosts that resolve to private/loopback/link-local addresses,
+    and anything with userinfo-style tricks. Resolution failure is treated
+    as unsafe (reject, don't crawl) rather than fail-open."""
+    if "@" in hostname:
+        return False
+    try:
+        resolved_ip = socket.gethostbyname(hostname)
+        ip = ipaddress.ip_address(resolved_ip)
+    except (OSError, ValueError):
+        return False
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved)
 
 
 async def discover_company_domain(search: SearchProvider, company_name: str) -> str | None:
@@ -34,12 +70,22 @@ async def discover_company_domain(search: SearchProvider, company_name: str) -> 
     if not results:
         return None
 
-    first = results[0]
-    if not _plausible_match(company_name, first.title, first.snippet):
+    match = None
+    for candidate in results[:3]:
+        if _plausible_match(company_name, candidate.title, candidate.snippet):
+            match = candidate
+            break
+    if match is None:
         return None
 
-    parsed = urlparse(first.url)
+    parsed = urlparse(match.url)
     domain = parsed.netloc or parsed.path.split("/")[0]
     if not domain:
         return None
-    return domain.lower()
+    domain = domain.lower()
+
+    hostname = domain.split(":")[0]
+    if "@" in domain or not _is_safe_host(hostname):
+        return None
+
+    return domain

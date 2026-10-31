@@ -34,16 +34,18 @@ Rules you MUST follow:
 - Every factual claim in snapshot/current_role/company_overview/expertise/recurring_themes/company_context/communication_style/likely_priorities MUST either:
   (a) include a source_ids list referencing one of the provided source "id" values, OR
   (b) be marked "is_inference": true if it's a reasonable inference rather than a directly observed fact.
+- Each claim object may also include an optional "date" field (string, e.g. "2026-03" or "2026-03-15"). Populate it when the claim describes a specific dated event or announcement (e.g. company news, a funding round, a product launch); otherwise leave it null. Never invent a date that isn't supported by the source.
 - NEVER invent a source_id that isn't in the provided sources list. NEVER invent a URL.
 - career_timeline entries must come only from the supplied career data, verbatim or lightly reworded — do not add entries, do not invent dates or roles.
 - activity entries must come only from supplied activity data — do not add entries.
 - Generate 0-7 "personalization_hooks", each with source_ids referencing only provided sources. If there isn't enough material, return fewer hooks or none — do not pad with generic flattery.
 - If sources conflict (e.g. two different dates/companies for the same role), add an entry to research_gaps.conflicting_information describing the conflict instead of picking one silently.
 - List anything notably missing (e.g. no company data found, no recent activity found) in research_gaps.missing_information.
+- If a "KNOWN RESEARCH GAPS" list is provided below, copy each of those gap strings VERBATIM into research_gaps.missing_information (in addition to anything else you identify).
 - Output ONLY valid JSON matching this exact shape, no prose, no markdown fences:
 {
   "prospect_name": string,
-  "snapshot": [{"text": string, "source_ids": [string], "confidence": "high"|"medium"|"low", "is_inference": bool}],
+  "snapshot": [{"text": string, "source_ids": [string], "confidence": "high"|"medium"|"low", "is_inference": bool, "date": string|null}],
   "current_role": [...same claim shape...],
   "company_overview": [...same claim shape...],
   "career_timeline": [{"organization": string, "title": string, "start_date": string|null, "end_date": string|null, "description": string|null, "source_ids": [string], "confidence": "high"|"medium"|"low"}],
@@ -70,12 +72,21 @@ def _extract_json(text: str) -> dict:
 
 
 def build_prompt(
-    person_data: dict, career: dict, activity: list[dict], sources: list[Source]
+    person_data: dict,
+    career: dict,
+    activity: list[dict],
+    sources: list[Source],
+    company_gaps: list[str] | None = None,
 ) -> str:
     sources_block = "\n".join(
         f'- id="{s.id}" url="{s.url}" title="{s.title or ""}" excerpt="{(s.excerpt or "")[:200]}"'
         for s in sources
     ) or "(no sources available)"
+
+    gaps_block = ""
+    if company_gaps:
+        gaps_list = "\n".join(f"- {g}" for g in company_gaps)
+        gaps_block = f"\nKNOWN RESEARCH GAPS (copy verbatim into research_gaps.missing_information):\n{gaps_list}\n"
 
     return (
         f"{SYSTEM_INSTRUCTIONS}\n\n"
@@ -86,6 +97,7 @@ def build_prompt(
         f"Activity (activity entries come from here, already structured — do not add entries): "
         f"{json.dumps(activity, default=str)}\n"
         f"Available sources (use ONLY these ids for citations):\n{sources_block}\n"
+        f"{gaps_block}"
     )
 
 
@@ -95,11 +107,12 @@ async def synthesize_with_ai(
     career: dict,
     activity: list[dict],
     sources: list[Source],
+    company_gaps: list[str] | None = None,
 ) -> tuple[ProspectBrief, dict]:
     """Raises on failure — caller is responsible for falling back to
     rule-based synthesis. Returns (brief, metadata) where metadata has
     provider/model/usage for cost tracking."""
-    prompt = build_prompt(person_data, career, activity, sources)
+    prompt = build_prompt(person_data, career, activity, sources, company_gaps)
 
     last_error: Exception | None = None
     for attempt in range(2):  # one retry on invalid structured output
@@ -144,6 +157,7 @@ def rule_based_synthesis(
     career: dict,
     activity: list[dict],
     sources: list[Source],
+    company_gaps: list[str] | None = None,
 ) -> tuple[ProspectBrief, dict]:
     """The deterministic fallback used whenever no AI provider is configured
     or the AI path fails. career_timeline and activity are structured data
@@ -219,6 +233,10 @@ def rule_based_synthesis(
     missing_information.append("No communication style assessment could be derived without AI synthesis")
     missing_information.append("No likely priorities could be derived without AI synthesis")
     missing_information.append("No personalization hooks could be derived without AI synthesis")
+    if company_gaps:
+        for gap in company_gaps:
+            if gap not in missing_information:
+                missing_information.append(gap)
 
     brief = ProspectBrief(
         prospect_name=person_data.get("full_name", "Unknown") if person_data else "Unknown",

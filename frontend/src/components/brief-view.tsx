@@ -149,9 +149,13 @@ function ActivityList({ items, sourcesById }: { items: ActivityItem[]; sourcesBy
           <ul className="space-y-2">
             {grouped.get(type)!.map((item, i) => (
               <li key={i} className="text-sm">
-                <a href={item.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                  {item.topic}
-                </a>
+                {item.url ? (
+                  <a href={item.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                    {item.topic}
+                  </a>
+                ) : (
+                  <span>{item.topic}</span>
+                )}
                 {item.published_at && (
                   <span className="ml-1 text-xs text-muted-foreground">({item.published_at})</span>
                 )}

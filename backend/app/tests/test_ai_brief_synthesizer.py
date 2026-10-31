@@ -95,6 +95,25 @@ def test_build_prompt_contains_new_section_names_and_anti_fabrication_rules():
     assert "conflicting_information" in prompt
 
 
+def test_build_prompt_describes_optional_date_field_on_claims():
+    prompt = build_prompt({"full_name": "Jane"}, {"career_timeline": []}, [], [VALID_SOURCE])
+
+    assert '"date"' in prompt
+
+
+def test_build_prompt_includes_company_gaps_block_when_provided():
+    prompt = build_prompt(
+        {"full_name": "Jane"},
+        {"career_timeline": []},
+        [],
+        [VALID_SOURCE],
+        ["Could not confidently identify Acme's official website"],
+    )
+
+    assert "KNOWN RESEARCH GAPS" in prompt
+    assert "Could not confidently identify Acme's official website" in prompt
+
+
 # ---------------------------------------------------------------------------
 # synthesize_with_ai
 # ---------------------------------------------------------------------------
@@ -371,3 +390,18 @@ def test_rule_based_synthesis_career_timeline_survives_citation_validator_round_
     known_ids = {s.id for s in brief.sources}
     assert "profile" in known_ids
     assert all(sid in known_ids for sid in brief.activity[0].source_ids)
+
+
+def test_rule_based_synthesis_folds_company_gaps_into_missing_information():
+    brief, _ = rule_based_synthesis(
+        {"full_name": "Jane Doe"},
+        {"career_timeline": []},
+        [],
+        [],
+        ["Could not confidently identify Acme Robotics's official website"],
+    )
+
+    assert (
+        "Could not confidently identify Acme Robotics's official website"
+        in brief.research_gaps.missing_information
+    )

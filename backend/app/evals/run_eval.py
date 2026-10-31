@@ -84,10 +84,11 @@ async def run_evaluation(use_live_providers: bool = False) -> EvalResult:
         known_source_ids = {s["id"] for s in run.brief.get("sources", [])}
         for section in (
             "snapshot",
-            "career_story",
             "current_role",
-            "company",
-            "content_and_interests",
+            "company_overview",
+            "expertise",
+            "recurring_themes",
+            "company_context",
             "communication_style",
             "likely_priorities",
         ):
@@ -103,7 +104,7 @@ async def run_evaluation(use_live_providers: bool = False) -> EvalResult:
                 if leaks:
                     result.sensitive_leaks.append(f"{fixture.id}: {leaks}")
 
-        result.total_hooks += len(run.brief.get("hooks", []))
+        result.total_hooks += len(run.brief.get("personalization_hooks", []))
 
     return result
 
