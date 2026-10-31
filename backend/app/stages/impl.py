@@ -117,13 +117,38 @@ class ResearchCompanyStage(Stage):
                 sources=[],
             )
         pages = await self.crawler.crawl(domain)
-        sources = [
-            {"url": p.url, "title": p.title, "excerpt": p.text[:280]} for p in pages
+        website_sources = [
+            {
+                "url": p.url,
+                "title": p.title,
+                "excerpt": p.text[:280],
+                "source_type": "company_website",
+            }
+            for p in pages
         ]
+
+        news_results = await self.search.search(
+            f'"{company}" announcement OR launch OR partnership', max_results=5
+        )
+        news_sources = [
+            {
+                "url": r.url,
+                "title": r.title,
+                "excerpt": r.snippet,
+                "source_type": "company_news",
+            }
+            for r in news_results
+        ]
+
         return StageResult(
             stage=self.name,
-            output={"company": company, "domain_guess": domain, "pages_crawled": len(pages)},
-            sources=sources,
+            output={
+                "company": company,
+                "domain_guess": domain,
+                "pages_crawled": len(pages),
+                "recent_news_count": len(news_results),
+            },
+            sources=website_sources + news_sources,
         )
 
 

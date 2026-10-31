@@ -274,3 +274,38 @@ def test_local_crawler_extracts_real_text_from_raw_html():
     assert extracted is not None
     assert "Acme Corp builds reliable distributed systems" in extracted
     assert "Copyright" not in extracted  # footer noise correctly stripped
+
+
+class _FakeLocalCrawlClient:
+    """Records every URL requested; always 404s so no robots/extraction
+    work is needed — this test only cares which paths get tried."""
+
+    requested_urls: list[str] = []
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def get(self, url):
+        _FakeLocalCrawlClient.requested_urls.append(url)
+        return _FakeResponse(404)
+
+
+@pytest.mark.asyncio
+async def test_local_crawler_includes_news_press_newsroom_paths(monkeypatch):
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeLocalCrawlClient)
+    monkeypatch.setattr(LocalExtractionCrawler, "_robots_allows", lambda self, domain, path: True)
+    _FakeLocalCrawlClient.requested_urls = []
+
+    crawler = LocalExtractionCrawler()
+    await crawler.crawl("example.com", max_pages=20)
+
+    requested_paths = [u.replace("https://example.com", "") or "/" for u in _FakeLocalCrawlClient.requested_urls]
+    assert "/news" in requested_paths
+    assert "/press" in requested_paths
+    assert "/newsroom" in requested_paths

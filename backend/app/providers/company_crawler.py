@@ -143,7 +143,17 @@ class LocalExtractionCrawler(CompanyCrawler):
         import httpx
         import trafilatura
 
-        paths = ["/", "/about", "/about-us", "/products", "/pricing", "/blog"][:max_pages]
+        paths = [
+            "/",
+            "/about",
+            "/about-us",
+            "/products",
+            "/pricing",
+            "/news",
+            "/press",
+            "/newsroom",
+            "/blog",
+        ][:max_pages]
         pages: list[CrawledPage] = []
 
         async with httpx.AsyncClient(

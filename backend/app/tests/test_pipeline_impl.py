@@ -116,6 +116,24 @@ class _FakeSearchProvider:
         return self._results
 
 
+class _QueryTrackingSearchProvider:
+    """Returns different results depending on the query, and records every
+    query it was called with so tests can assert on call shape/order."""
+
+    name = "fake-tracking"
+
+    def __init__(self, results_by_query_substring):
+        self._results_by_query_substring = results_by_query_substring
+        self.calls: list[tuple[str, int]] = []
+
+    async def search(self, query: str, max_results: int = 10):
+        self.calls.append((query, max_results))
+        for substring, results in self._results_by_query_substring.items():
+            if substring in query:
+                return results
+        return []
+
+
 @pytest.mark.asyncio
 async def test_research_company_stage_uses_discovered_domain_when_confident():
     from app.providers.search_provider import SearchResult
@@ -160,3 +178,54 @@ async def test_research_company_stage_reports_gap_when_no_confident_match():
     assert result.output["gaps"] == [
         "Could not confidently identify Acme Robotics's official website"
     ]
+
+
+@pytest.mark.asyncio
+async def test_research_company_stage_searches_for_news_and_tags_source_types():
+    from app.providers.company_crawler import CrawledPage
+    from app.providers.search_provider import SearchResult
+    from app.schemas.profile import Person
+
+    class _FakeCrawler:
+        name = "fake"
+
+        async def crawl(self, domain: str, max_pages: int = 15):
+            return [CrawledPage(url=f"https://{domain}/about", title="About", text="Acme Robotics builds robots.")]
+
+    domain_result = SearchResult(
+        url="https://acmerobotics.com/about",
+        title="Acme Robotics - Official Website",
+        snippet="Acme Robotics builds industrial robots.",
+    )
+    news_result = SearchResult(
+        url="https://techcrunch.com/acme-robotics-raises-series-b",
+        title="Acme Robotics raises Series B",
+        snippet="Acme Robotics announced a new partnership and product launch.",
+    )
+    search = _QueryTrackingSearchProvider(
+        {
+            "official website": [domain_result],
+            "announcement OR launch OR partnership": [news_result],
+        }
+    )
+
+    stage = ResearchCompanyStage(_FakeCrawler(), search=search)
+    ctx = StageContext(run_id="r3", depth="standard")
+    ctx.outputs["_person"] = Person(
+        full_name="Jane Doe", current_company="Acme Robotics", source="manual"
+    )
+
+    result = await stage.run(ctx)
+
+    news_queries = [q for q, _ in search.calls if "announcement OR launch OR partnership" in q]
+    assert news_queries == ['"Acme Robotics" announcement OR launch OR partnership']
+    assert [max_results for q, max_results in search.calls if q == news_queries[0]] == [5]
+
+    assert result.output["recent_news_count"] == 1
+
+    website_sources = [s for s in result.sources if s["source_type"] == "company_website"]
+    news_sources = [s for s in result.sources if s["source_type"] == "company_news"]
+    assert len(website_sources) == 1
+    assert website_sources[0]["url"] == "https://acmerobotics.com/about"
+    assert len(news_sources) == 1
+    assert news_sources[0]["url"] == "https://techcrunch.com/acme-robotics-raises-series-b"
