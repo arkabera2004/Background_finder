@@ -1,5 +1,153 @@
 {
   "$defs": {
+    "ActivityItem": {
+      "properties": {
+        "activity_type": {
+          "$ref": "#/$defs/ActivityType"
+        },
+        "topic": {
+          "title": "Topic",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Published At"
+        },
+        "authored_by_person": {
+          "default": true,
+          "title": "Authored By Person",
+          "type": "boolean"
+        },
+        "relevance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relevance"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence",
+          "default": "medium"
+        },
+        "source_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "activity_type",
+        "topic",
+        "summary",
+        "url"
+      ],
+      "title": "ActivityItem",
+      "type": "object"
+    },
+    "ActivityType": {
+      "enum": [
+        "original_post",
+        "repost_or_share",
+        "comment",
+        "article_or_publication",
+        "interview_or_podcast",
+        "talk_or_presentation",
+        "professional_announcement",
+        "other_public_activity"
+      ],
+      "title": "ActivityType",
+      "type": "string"
+    },
+    "CareerEntry": {
+      "properties": {
+        "organization": {
+          "title": "Organization",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "start_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Date"
+        },
+        "end_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Date"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "source_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence",
+          "default": "medium"
+        }
+      },
+      "required": [
+        "organization",
+        "title"
+      ],
+      "title": "CareerEntry",
+      "type": "object"
+    },
     "Claim": {
       "properties": {
         "text": {
@@ -22,6 +170,18 @@
           "default": false,
           "title": "Is Inference",
           "type": "boolean"
+        },
+        "date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date"
         }
       },
       "required": [
@@ -39,10 +199,71 @@
       "title": "Confidence",
       "type": "string"
     },
-    "Hook": {
+    "OutreachStrategy": {
       "properties": {
-        "text": {
-          "title": "Text",
+        "angle": {
+          "title": "Angle",
+          "type": "string"
+        },
+        "primary_hooks": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Primary Hooks",
+          "type": "array"
+        },
+        "question_or_value_prop": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Question Or Value Prop"
+        },
+        "opening_approach": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opening Approach"
+        },
+        "avoid": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Avoid",
+          "type": "array"
+        }
+      },
+      "required": [
+        "angle"
+      ],
+      "title": "OutreachStrategy",
+      "type": "object"
+    },
+    "PersonalizationHook": {
+      "properties": {
+        "evidence": {
+          "title": "Evidence",
+          "type": "string"
+        },
+        "relevance": {
+          "title": "Relevance",
+          "type": "string"
+        },
+        "outreach_angle": {
+          "title": "Outreach Angle",
           "type": "string"
         },
         "source_ids": {
@@ -58,10 +279,58 @@
         }
       },
       "required": [
-        "text",
+        "evidence",
+        "relevance",
+        "outreach_angle",
         "source_ids"
       ],
-      "title": "Hook",
+      "title": "PersonalizationHook",
+      "type": "object"
+    },
+    "ResearchGaps": {
+      "properties": {
+        "missing_information": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Missing Information",
+          "type": "array"
+        },
+        "limited_coverage_areas": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Limited Coverage Areas",
+          "type": "array"
+        },
+        "conflicting_information": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Conflicting Information",
+          "type": "array"
+        },
+        "unverified_claims": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Unverified Claims",
+          "type": "array"
+        },
+        "inaccessible_sources": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Inaccessible Sources",
+          "type": "array"
+        }
+      },
+      "title": "ResearchGaps",
       "type": "object"
     },
     "Source": {
@@ -97,6 +366,50 @@
           ],
           "default": null,
           "title": "Excerpt"
+        },
+        "publisher": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Publisher"
+        },
+        "source_type": {
+          "$ref": "#/$defs/SourceType",
+          "default": "other"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Published At"
+        },
+        "retrieved_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retrieved At"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence",
+          "default": "medium"
         }
       },
       "required": [
@@ -105,6 +418,18 @@
       ],
       "title": "Source",
       "type": "object"
+    },
+    "SourceType": {
+      "enum": [
+        "company_website",
+        "company_news",
+        "news_article",
+        "social_profile",
+        "social_post",
+        "other"
+      ],
+      "title": "SourceType",
+      "type": "string"
     }
   },
   "properties": {
@@ -120,14 +445,6 @@
       "title": "Snapshot",
       "type": "array"
     },
-    "career_story": {
-      "default": [],
-      "items": {
-        "$ref": "#/$defs/Claim"
-      },
-      "title": "Career Story",
-      "type": "array"
-    },
     "current_role": {
       "default": [],
       "items": {
@@ -136,20 +453,52 @@
       "title": "Current Role",
       "type": "array"
     },
-    "company": {
+    "company_overview": {
       "default": [],
       "items": {
         "$ref": "#/$defs/Claim"
       },
-      "title": "Company",
+      "title": "Company Overview",
       "type": "array"
     },
-    "content_and_interests": {
+    "career_timeline": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/CareerEntry"
+      },
+      "title": "Career Timeline",
+      "type": "array"
+    },
+    "expertise": {
       "default": [],
       "items": {
         "$ref": "#/$defs/Claim"
       },
-      "title": "Content And Interests",
+      "title": "Expertise",
+      "type": "array"
+    },
+    "activity": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ActivityItem"
+      },
+      "title": "Activity",
+      "type": "array"
+    },
+    "recurring_themes": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Claim"
+      },
+      "title": "Recurring Themes",
+      "type": "array"
+    },
+    "company_context": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Claim"
+      },
+      "title": "Company Context",
       "type": "array"
     },
     "communication_style": {
@@ -160,14 +509,6 @@
       "title": "Communication Style",
       "type": "array"
     },
-    "hooks": {
-      "default": [],
-      "items": {
-        "$ref": "#/$defs/Hook"
-      },
-      "title": "Hooks",
-      "type": "array"
-    },
     "likely_priorities": {
       "default": [],
       "items": {
@@ -176,13 +517,16 @@
       "title": "Likely Priorities",
       "type": "array"
     },
-    "dos_and_donts": {
+    "personalization_hooks": {
       "default": [],
       "items": {
-        "type": "string"
+        "$ref": "#/$defs/PersonalizationHook"
       },
-      "title": "Dos And Donts",
+      "title": "Personalization Hooks",
       "type": "array"
+    },
+    "outreach_strategy": {
+      "$ref": "#/$defs/OutreachStrategy"
     },
     "sources": {
       "default": [],
@@ -191,10 +535,21 @@
       },
       "title": "Sources",
       "type": "array"
+    },
+    "research_gaps": {
+      "$ref": "#/$defs/ResearchGaps",
+      "default": {
+        "missing_information": [],
+        "limited_coverage_areas": [],
+        "conflicting_information": [],
+        "unverified_claims": [],
+        "inaccessible_sources": []
+      }
     }
   },
   "required": [
-    "prospect_name"
+    "prospect_name",
+    "outreach_strategy"
   ],
   "title": "ProspectBrief",
   "type": "object",
