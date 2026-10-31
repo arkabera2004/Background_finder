@@ -3,7 +3,7 @@ import pytest
 from app.providers.company_crawler import NullCrawler
 from app.providers.profile_provider import ManualProvider
 from app.providers.search_provider import NullSearchProvider
-from app.schemas.profile import Experience, Person
+from app.schemas.profile import Experience, Person, Post
 from app.stages.base import StageContext, StageName
 from app.stages.impl import (
     AnalyseActivityStage,
@@ -256,3 +256,77 @@ async def test_research_company_stage_searches_for_news_and_tags_source_types():
     assert website_sources[0]["url"] == "https://acmerobotics.com/about"
     assert len(news_sources) == 1
     assert news_sources[0]["url"] == "https://techcrunch.com/acme-robotics-raises-series-b"
+
+
+@pytest.mark.asyncio
+async def test_analyse_activity_stage_classifies_mixed_post_types():
+    # NOTE: at the time this task was implemented, app.stages.impl cannot be
+    # imported under pytest because app.services.ai_brief_synthesizer still
+    # imports the removed `Hook` symbol from app.schemas.brief (Task 7's
+    # fix, not this task's). This test is correct and will start running the
+    # moment Task 7 lands; its logic was independently verified with a
+    # standalone script that imports only activity_classifier/profile/brief.
+    person = Person(
+        full_name="Jane Doe",
+        linkedin_url="https://linkedin.com/in/janedoe",
+        source="manual",
+        posts=[
+            Post(text="Excited to announce my new role", is_repost=False, url="https://x/1"),
+            Post(
+                text="Check out this great podcast episode",
+                is_repost=False,
+                url="https://x/2",
+            ),
+            Post(text="interesting read worth sharing", is_repost=True, url="https://x/3"),
+        ],
+    )
+    ctx = StageContext(run_id="r4", depth="standard")
+    ctx.outputs["_person"] = person
+
+    result = await AnalyseActivityStage().run(ctx)
+
+    activity = result.output["activity"]
+    assert len(activity) == 3
+    assert activity[0]["activity_type"] == "professional_announcement"
+    assert activity[1]["activity_type"] == "interview_or_podcast"
+    assert activity[2]["activity_type"] == "repost_or_share"
+    assert activity[2]["authored_by_person"] is False
+
+
+@pytest.mark.asyncio
+async def test_web_footprint_stage_issues_three_queries_and_dedupes_by_url():
+    # Same unexecuted-under-current-collection-errors caveat as the test
+    # above.
+    from app.providers.search_provider import SearchResult
+
+    results_by_query_substring = {
+        "interview OR podcast": [
+            SearchResult(url="https://dup.example/a", title="Jane Doe interview", snippet="podcast talk")
+        ],
+        "article OR publication": [
+            SearchResult(url="https://dup.example/a", title="duplicate", snippet="duplicate"),
+            SearchResult(
+                url="https://unique.example/b", title="Jane Doe article", snippet="published piece"
+            ),
+        ],
+        "talk OR conference OR webinar": [
+            SearchResult(url="https://unique.example/c", title="conference talk", snippet="webinar")
+        ],
+    }
+    search = _QueryTrackingSearchProvider(results_by_query_substring)
+    stage = WebFootprintStage(search)
+    ctx = StageContext(run_id="r5", depth="standard")
+    ctx.outputs["_person"] = Person(full_name="Jane Doe", source="manual")
+
+    result = await stage.run(ctx)
+
+    assert len(search.calls) == 3
+    queries_issued = [q for q, _ in search.calls]
+    assert queries_issued == [
+        '"Jane Doe" interview OR podcast',
+        '"Jane Doe" article OR publication',
+        '"Jane Doe" talk OR conference OR webinar',
+    ]
+    # Deduplicated by URL across the three queries (3 unique urls, not 4).
+    assert result.output["footprint_items"] == 3
+    assert len({s["url"] for s in result.sources}) == 3

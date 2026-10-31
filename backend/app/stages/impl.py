@@ -11,8 +11,9 @@ import logging
 from app.providers.ai_provider import AiProvider
 from app.providers.company_crawler import CompanyCrawler
 from app.providers.profile_provider import ProfileProvider
-from app.providers.search_provider import SearchProvider
-from app.schemas.brief import Source
+from app.providers.search_provider import SearchProvider, SearchResult
+from app.schemas.brief import ActivityType, Source
+from app.services.activity_classifier import classify_activity, is_byline_match
 from app.services.ai_brief_synthesizer import rule_based_synthesis, synthesize_with_ai
 from app.services.career_analysis import analyse_career, build_career_timeline
 from app.services.company_discovery import discover_company_domain
@@ -176,12 +177,36 @@ class AnalyseActivityStage(Stage):
         posts = getattr(person, "posts", []) if person else []
         originals = [p for p in posts if not p.is_repost]
         reposts = [p for p in posts if p.is_repost]
+
+        profile_source = ctx.outputs.get("_profile_source", {"id": "profile"})
+        profile_source_id = profile_source.get("id", "profile")
+
+        activity: list[dict] = []
+        for post in posts:
+            activity_type = classify_activity(post.text, is_known_repost=post.is_repost)
+            if activity_type == ActivityType.OTHER_PUBLIC_ACTIVITY and not post.is_repost:
+                activity_type = ActivityType.ORIGINAL_POST
+            activity.append(
+                {
+                    "activity_type": activity_type.value,
+                    "topic": post.text[:80],
+                    "summary": post.text,
+                    "url": post.url or "",
+                    "published_at": post.posted_at,
+                    "authored_by_person": not post.is_repost,
+                    "relevance": None,
+                    "confidence": "medium",
+                    "source_ids": [profile_source_id],
+                }
+            )
+
         return StageResult(
             stage=self.name,
             output={
                 "original_post_count": len(originals),
                 "repost_count": len(reposts),
                 "note": "no post history available" if not posts else None,
+                "activity": activity,
             },
         )
 
@@ -195,10 +220,54 @@ class WebFootprintStage(Stage):
     async def run(self, ctx: StageContext) -> StageResult:
         person = ctx.outputs.get("_person")
         name = getattr(person, "full_name", None) or ""
-        results = await self.search.search(f'"{name}" interview OR podcast OR article', max_results=10)
-        sources = [{"url": r.url, "title": r.title, "excerpt": r.snippet} for r in results]
+
+        queries = [
+            f'"{name}" interview OR podcast',
+            f'"{name}" article OR publication',
+            f'"{name}" talk OR conference OR webinar',
+        ]
+
+        seen_urls: set[str] = set()
+        merged: list[SearchResult] = []
+        for query in queries:
+            results = await self.search.search(query, max_results=10)
+            for r in results:
+                if r.url in seen_urls:
+                    continue
+                seen_urls.add(r.url)
+                merged.append(r)
+
+        sources: list[dict] = []
+        activity: list[dict] = []
+        for r in merged:
+            text = f"{r.title or ''} {r.snippet or ''}"
+            activity_type = classify_activity(text)
+            authored_by_person = False
+            if activity_type in (
+                ActivityType.ARTICLE_OR_PUBLICATION,
+                ActivityType.INTERVIEW_OR_PODCAST,
+            ) and is_byline_match(name, text):
+                authored_by_person = True
+
+            sources.append({"url": r.url, "title": r.title, "excerpt": r.snippet})
+            activity.append(
+                {
+                    "activity_type": activity_type.value,
+                    "topic": (r.title or "")[:80],
+                    "summary": r.snippet or "",
+                    "url": r.url,
+                    "published_at": None,
+                    "authored_by_person": authored_by_person,
+                    "relevance": None,
+                    "confidence": "medium" if authored_by_person else "low",
+                    "source_ids": [],
+                }
+            )
+
         return StageResult(
-            stage=self.name, output={"footprint_items": len(results)}, sources=sources
+            stage=self.name,
+            output={"footprint_items": len(merged), "activity": activity},
+            sources=sources,
         )
 
 
