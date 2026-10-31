@@ -50,12 +50,58 @@ export interface RunStepView {
   completed_at: string | null;
 }
 
+export type Confidence = "high" | "medium" | "low";
+
+export interface BriefSource {
+  id: string;
+  url: string;
+  title: string | null;
+  excerpt: string | null;
+}
+
+export interface BriefClaim {
+  text: string;
+  source_ids: string[];
+  confidence: Confidence;
+  is_inference: boolean;
+}
+
+export interface BriefHook {
+  text: string;
+  source_ids: string[];
+  confidence: Confidence;
+}
+
+export interface SynthesisMetadata {
+  synthesis_method: "ai" | "rule_based";
+  provider: string | null;
+  model: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  estimated_cost_usd: number;
+}
+
+export interface ProspectBrief {
+  prospect_name: string;
+  snapshot: BriefClaim[];
+  career_story: BriefClaim[];
+  current_role: BriefClaim[];
+  company: BriefClaim[];
+  content_and_interests: BriefClaim[];
+  communication_style: BriefClaim[];
+  hooks: BriefHook[];
+  likely_priorities: BriefClaim[];
+  dos_and_donts: string[];
+  sources: BriefSource[];
+  _synthesis_metadata?: SynthesisMetadata;
+}
+
 export interface RunView {
   id: string;
   status: "pending" | "running" | "completed" | "failed" | "cancelled";
   depth: string;
   steps: Record<string, RunStepView>;
-  brief: Record<string, unknown> | null;
+  brief: ProspectBrief | null;
   created_at: string;
   completed_at: string | null;
 }
@@ -68,7 +114,7 @@ export interface Prospect {
   status: string;
   source_run_id: string | null;
   created_at: string;
-  brief: Record<string, unknown> | null;
+  brief: ProspectBrief | null;
 }
 
 export interface Company {

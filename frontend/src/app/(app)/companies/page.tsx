@@ -42,7 +42,7 @@ export default function CompaniesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Companies</h1>
+      <h1 className="text-xl font-display tracking-tight">Companies</h1>
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>

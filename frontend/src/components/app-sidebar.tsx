@@ -28,7 +28,9 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="px-4 py-3 text-sm font-semibold">ProspectLens</SidebarHeader>
+      <SidebarHeader className="px-4 py-3 font-display text-base tracking-tight">
+        ProspectLens
+      </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>

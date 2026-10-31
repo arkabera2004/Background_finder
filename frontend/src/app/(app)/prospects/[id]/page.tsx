@@ -3,8 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 
+import { BriefView } from "@/components/brief-view";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, type ExportFormat } from "@/lib/api";
 
@@ -45,13 +45,12 @@ export default function ProspectDetailPage() {
     );
   }
 
-  const brief = prospect.brief as Record<string, unknown> | null;
-  const sources = (brief?.sources as Array<{ id: string; url: string; title?: string }>) ?? [];
+  const brief = prospect.brief;
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="max-w-3xl space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{prospect.full_name}</h1>
+        <h1 className="text-xl font-display tracking-tight">{prospect.full_name}</h1>
         <Button
           variant="destructive"
           size="sm"
@@ -74,30 +73,11 @@ export default function ProspectDetailPage() {
         </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Sources ({sources.length})</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-1 text-sm">
-          {sources.length === 0 && (
-            <p className="text-muted-foreground">
-              No web sources — this brief was built from directly supplied
-              information only.
-            </p>
-          )}
-          {sources.map((s) => (
-            <a
-              key={s.id}
-              href={s.url}
-              target="_blank"
-              rel="noreferrer"
-              className="block text-primary hover:underline"
-            >
-              {s.title ?? s.url}
-            </a>
-          ))}
-        </CardContent>
-      </Card>
+      {brief ? (
+        <BriefView brief={brief} />
+      ) : (
+        <p className="text-sm text-muted-foreground">No brief saved for this prospect.</p>
+      )}
     </div>
   );
 }

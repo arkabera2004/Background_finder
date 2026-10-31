@@ -83,7 +83,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
 
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{company.name}</h1>
+          <h1 className="text-2xl font-display tracking-tight">{company.name}</h1>
           {company.domain && <p className="text-gray-600">{company.domain}</p>}
         </div>
         <Button variant="destructive" size="sm" onClick={handleDelete}>

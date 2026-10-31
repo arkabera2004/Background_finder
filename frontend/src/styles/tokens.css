@@ -1,0 +1,169 @@
+/* =============================================================
+   DESIGN TOKENS — ported from Chronos (mriganko da/Chronos).
+
+   TIER 1  reference  - raw values, never consumed by components
+   TIER 2  semantic   - intent, consumed only by globals.css's
+                        remapping onto shadcn's variable names
+                        (--background, --primary, --border, etc)
+                        so existing shadcn components pick up this
+                        palette with zero per-component changes.
+   ============================================================= */
+
+:root {
+  /* ---------- TIER 1 — REFERENCE ---------- */
+
+  --ref-white: #ffffff;
+  --ref-black: #000000;
+
+  --ref-gray-50: #fafafa;
+  --ref-gray-100: #f2f2f2;
+  --ref-gray-200: #e5e5e5;
+  --ref-gray-300: #d4d4d4;
+  --ref-gray-400: #afafaf;
+  --ref-gray-500: #8a8a8a;
+  --ref-gray-550: #737373;
+  --ref-gray-600: #626262;
+  --ref-gray-650: #525252;
+  --ref-gray-700: #464646;
+  --ref-gray-750: #3b3b3b;
+  --ref-gray-800: #323232;
+  --ref-gray-825: #2a2a2a;
+  --ref-gray-850: #232323;
+  --ref-gray-900: #191919;
+  --ref-gray-950: #101010;
+
+  --ref-red-300: #ff969b;
+  --ref-red-400: #ff646b;
+  --ref-red-600: #e9343c;
+  --ref-red-700: #c62830;
+  --ref-red-800: #a62329;
+
+  --ref-blue-300: #88cef4;
+  --ref-blue-400: #55b4eb;
+  --ref-blue-600: #2179be;
+  --ref-blue-700: #1e61a0;
+  --ref-blue-800: #1c5083;
+
+  --ref-green-300: #8ed8a9;
+  --ref-green-400: #62c487;
+  --ref-green-600: #318c54;
+  --ref-green-700: #2b7046;
+  --ref-green-800: #275a3b;
+
+  --ref-orange-300: #ffb365;
+  --ref-orange-400: #ff963d;
+  --ref-orange-600: #e95d0f;
+  --ref-orange-700: #c1460f;
+  --ref-orange-800: #9a3814;
+
+  --ref-purple-400: #b65bd8;
+  --ref-purple-600: #862aa3;
+
+  /* ---------- TIER 2 — SEMANTIC (light is default on :root) ---------- */
+
+  --surface-page-background: var(--ref-gray-100);
+  --surface-container: var(--ref-white);
+  --surface-raised: var(--ref-gray-50);
+  --surface-raised-x2: var(--ref-gray-100);
+  --surface-action: var(--ref-gray-100);
+  --surface-scroll-bar: var(--ref-gray-300);
+
+  --text-primary: var(--ref-gray-950);
+  --text-secondary: var(--ref-gray-700);
+  --text-tertiary: var(--ref-gray-550);
+  --text-quaternary: var(--ref-gray-500);
+  --text-on-color: var(--ref-white);
+
+  --stroke-default: rgba(0, 0, 0, 0.14);
+  --stroke-active: rgba(0, 0, 0, 0.24);
+  --stroke-muted: rgba(0, 0, 0, 0.08);
+
+  --action-primary-default: var(--ref-gray-950);
+  --action-primary-hover: var(--ref-gray-850);
+  --action-primary-disabled: var(--ref-gray-300);
+  --action-primary-content: var(--ref-white);
+
+  --action-secondary-default: var(--ref-gray-100);
+  --action-secondary-hover: var(--ref-gray-200);
+  --action-secondary-disabled: var(--ref-gray-50);
+  --action-secondary-content: var(--text-primary);
+
+  --action-tertiary-hover: rgba(0, 0, 0, 0.06);
+
+  --feedback-success-content: var(--ref-green-700);
+  --feedback-success-icon: var(--ref-green-600);
+  --feedback-success-stroke: var(--ref-green-300);
+  --feedback-success-background: rgba(63, 174, 105, 0.12);
+
+  --feedback-info-content: var(--ref-blue-700);
+  --feedback-info-icon: var(--ref-blue-600);
+  --feedback-info-stroke: var(--ref-blue-300);
+  --feedback-info-background: rgba(44, 150, 219, 0.12);
+
+  --feedback-warning-content: var(--ref-orange-700);
+  --feedback-warning-icon: var(--ref-orange-600);
+  --feedback-warning-stroke: var(--ref-orange-300);
+  --feedback-warning-background: rgba(255, 123, 28, 0.12);
+
+  --feedback-error-content: var(--ref-red-700);
+  --feedback-error-icon: var(--ref-red-600);
+  --feedback-error-stroke: var(--ref-red-300);
+  --feedback-error-background: rgba(255, 65, 73, 0.12);
+
+  --analytics-series-1: var(--feedback-info-icon);
+  --analytics-series-2: var(--feedback-success-icon);
+  --analytics-series-3: var(--feedback-warning-icon);
+  --analytics-series-4: var(--feedback-error-icon);
+  --analytics-series-5: var(--ref-gray-600);
+}
+
+/* Dark theme — ProspectLens toggles via next-themes' `.dark` class
+   (Chronos itself uses [data-theme="dark"]; values ported 1:1, selector
+   adapted to the strategy already wired in this app's ThemeProvider). */
+.dark {
+  --surface-page-background: var(--ref-black);
+  --surface-container: var(--ref-gray-950);
+  --surface-raised: var(--ref-gray-900);
+  --surface-raised-x2: var(--ref-gray-850);
+  --surface-action: var(--ref-gray-900);
+  --surface-scroll-bar: var(--ref-gray-750);
+
+  --text-primary: var(--ref-gray-50);
+  --text-secondary: var(--ref-gray-300);
+  --text-tertiary: var(--ref-gray-500);
+  --text-quaternary: var(--ref-gray-600);
+  --text-on-color: var(--ref-black);
+
+  --stroke-default: rgba(255, 255, 255, 0.14);
+  --stroke-active: rgba(255, 255, 255, 0.24);
+  --stroke-muted: rgba(255, 255, 255, 0.08);
+
+  --action-primary-default: var(--ref-gray-50);
+  --action-primary-hover: var(--ref-gray-200);
+  --action-primary-disabled: var(--ref-gray-700);
+  --action-primary-content: var(--ref-black);
+
+  --action-secondary-default: var(--ref-gray-850);
+  --action-secondary-hover: var(--ref-gray-800);
+  --action-secondary-disabled: var(--ref-gray-950);
+
+  --action-tertiary-hover: rgba(255, 255, 255, 0.06);
+
+  --feedback-success-content: var(--ref-green-300);
+  --feedback-success-icon: var(--ref-green-400);
+  --feedback-success-stroke: var(--ref-green-700);
+
+  --feedback-info-content: var(--ref-blue-300);
+  --feedback-info-icon: var(--ref-blue-400);
+  --feedback-info-stroke: var(--ref-blue-700);
+
+  --feedback-warning-content: var(--ref-orange-300);
+  --feedback-warning-icon: var(--ref-orange-400);
+  --feedback-warning-stroke: var(--ref-orange-700);
+
+  --feedback-error-content: var(--ref-red-300);
+  --feedback-error-icon: var(--ref-red-400);
+  --feedback-error-stroke: var(--ref-red-700);
+
+  --analytics-series-5: var(--ref-gray-400);
+}

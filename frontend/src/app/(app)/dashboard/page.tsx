@@ -28,7 +28,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Dashboard</h1>
+      <h1 className="text-xl font-display tracking-tight">Dashboard</h1>
 
       {loading ? (
         <div className="text-center text-gray-500">Loading stats...</div>

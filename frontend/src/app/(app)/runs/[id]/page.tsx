@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { BriefView } from "@/components/brief-view";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,9 +74,9 @@ export default function RunDetailPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="max-w-3xl space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Research Run</h1>
+        <h1 className="text-xl font-display tracking-tight">Research Run</h1>
         <StatusBadge status={run.status} />
       </div>
 
@@ -114,19 +114,9 @@ export default function RunDetailPage() {
       )}
 
       {run.status === "completed" && run.brief && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Prospect Brief: {String(run.brief.prospect_name)}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <Alert>
-              <AlertDescription>
-                This brief was synthesised without web search or AI synthesis
-                credentials configured, so it only contains what was directly
-                supplied — no fabricated claims. See the sources list for
-                exactly what backs each claim.
-              </AlertDescription>
-            </Alert>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Prospect Brief: {run.brief.prospect_name}</h2>
             <Button
               size="sm"
               onClick={() =>
@@ -138,8 +128,9 @@ export default function RunDetailPage() {
             >
               {saveMutation.isPending ? "Saving..." : "Save to Prospect Library"}
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+          <BriefView brief={run.brief} />
+        </div>
       )}
     </div>
   );

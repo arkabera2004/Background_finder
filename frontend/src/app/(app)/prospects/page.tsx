@@ -18,7 +18,7 @@ export default function ProspectsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Prospects</h1>
+      <h1 className="text-xl font-display tracking-tight">Prospects</h1>
 
       {isLoading && <Skeleton className="h-24 w-full" />}
 

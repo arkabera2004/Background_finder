@@ -53,7 +53,7 @@ export default function NewResearchPage() {
 
   return (
     <div className="max-w-xl space-y-6">
-      <h1 className="text-xl font-semibold">New Research</h1>
+      <h1 className="text-xl font-display tracking-tight">New Research</h1>
       <Card>
         <CardHeader>
           <CardTitle>How should we find this person?</CardTitle>
