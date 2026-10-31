@@ -80,7 +80,7 @@ class PersonalizationHook(BaseModel):
 
 
 class OutreachStrategy(BaseModel):
-    angle: str
+    angle: str | None = None
     primary_hooks: list[str] = []
     question_or_value_prop: str | None = None
     opening_approach: str | None = None

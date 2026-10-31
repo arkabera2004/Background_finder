@@ -202,8 +202,16 @@
     "OutreachStrategy": {
       "properties": {
         "angle": {
-          "title": "Angle",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Angle"
         },
         "primary_hooks": {
           "default": [],
@@ -246,9 +254,6 @@
           "type": "array"
         }
       },
-      "required": [
-        "angle"
-      ],
       "title": "OutreachStrategy",
       "type": "object"
     },

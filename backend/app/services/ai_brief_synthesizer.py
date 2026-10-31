@@ -15,30 +15,47 @@ import re
 from pydantic import ValidationError
 
 from app.providers.ai_provider import AiProvider, AiProviderError
-from app.schemas.brief import Claim, Confidence, Hook, ProspectBrief, Source
+from app.schemas.brief import (
+    ActivityItem,
+    CareerEntry,
+    Claim,
+    Confidence,
+    OutreachStrategy,
+    ProspectBrief,
+    ResearchGaps,
+    Source,
+)
 from app.services.citation_validator import validate_brief
 
 SYSTEM_INSTRUCTIONS = """You are producing a structured Prospect Brief as JSON.
 
 Rules you MUST follow:
 - Only use facts present in the provided research data below. Never invent names, titles, companies, dates, or events.
-- Every factual claim in snapshot/career_story/current_role/company/content_and_interests/communication_style/likely_priorities MUST either:
+- Every factual claim in snapshot/current_role/company_overview/expertise/recurring_themes/company_context/communication_style/likely_priorities MUST either:
   (a) include a source_ids list referencing one of the provided source "id" values, OR
   (b) be marked "is_inference": true if it's a reasonable inference rather than a directly observed fact.
 - NEVER invent a source_id that isn't in the provided sources list. NEVER invent a URL.
-- Generate 0-7 "hooks" (personalisation hooks), each with source_ids referencing only provided sources. If there isn't enough material, return fewer hooks or none — do not pad with generic flattery.
+- career_timeline entries must come only from the supplied career data, verbatim or lightly reworded — do not add entries, do not invent dates or roles.
+- activity entries must come only from supplied activity data — do not add entries.
+- Generate 0-7 "personalization_hooks", each with source_ids referencing only provided sources. If there isn't enough material, return fewer hooks or none — do not pad with generic flattery.
+- If sources conflict (e.g. two different dates/companies for the same role), add an entry to research_gaps.conflicting_information describing the conflict instead of picking one silently.
+- List anything notably missing (e.g. no company data found, no recent activity found) in research_gaps.missing_information.
 - Output ONLY valid JSON matching this exact shape, no prose, no markdown fences:
 {
   "prospect_name": string,
   "snapshot": [{"text": string, "source_ids": [string], "confidence": "high"|"medium"|"low", "is_inference": bool}],
-  "career_story": [...same claim shape...],
   "current_role": [...same claim shape...],
-  "company": [...same claim shape...],
-  "content_and_interests": [...same claim shape...],
+  "company_overview": [...same claim shape...],
+  "career_timeline": [{"organization": string, "title": string, "start_date": string|null, "end_date": string|null, "description": string|null, "source_ids": [string], "confidence": "high"|"medium"|"low"}],
+  "expertise": [...same claim shape...],
+  "activity": [{"activity_type": string, "topic": string, "summary": string, "url": string, "published_at": string|null, "authored_by_person": bool, "relevance": string|null, "confidence": "high"|"medium"|"low", "source_ids": [string]}],
+  "recurring_themes": [...same claim shape...],
+  "company_context": [...same claim shape...],
   "communication_style": [...same claim shape...],
   "likely_priorities": [...same claim shape...],
-  "hooks": [{"text": string, "source_ids": [string], "confidence": "high"|"medium"|"low"}],
-  "dos_and_donts": [string]
+  "personalization_hooks": [{"evidence": string, "relevance": string, "outreach_angle": string, "source_ids": [string], "confidence": "high"|"medium"|"low"}],
+  "outreach_strategy": {"angle": string|null, "primary_hooks": [string], "question_or_value_prop": string|null, "opening_approach": string|null, "avoid": [string]},
+  "research_gaps": {"missing_information": [string], "limited_coverage_areas": [string], "conflicting_information": [string], "unverified_claims": [string], "inaccessible_sources": [string]}
 }
 """
 
@@ -52,7 +69,9 @@ def _extract_json(text: str) -> dict:
     return json.loads(stripped)
 
 
-def build_prompt(person_data: dict, career: dict, sources: list[Source]) -> str:
+def build_prompt(
+    person_data: dict, career: dict, activity: list[dict], sources: list[Source]
+) -> str:
     sources_block = "\n".join(
         f'- id="{s.id}" url="{s.url}" title="{s.title or ""}" excerpt="{(s.excerpt or "")[:200]}"'
         for s in sources
@@ -62,18 +81,25 @@ def build_prompt(person_data: dict, career: dict, sources: list[Source]) -> str:
         f"{SYSTEM_INSTRUCTIONS}\n\n"
         f"RESEARCH DATA:\n"
         f"Person: {json.dumps(person_data, default=str)}\n"
-        f"Career analysis: {json.dumps(career, default=str)}\n"
+        f"Career analysis (career_timeline entries come from here, already structured — do not add entries): "
+        f"{json.dumps(career, default=str)}\n"
+        f"Activity (activity entries come from here, already structured — do not add entries): "
+        f"{json.dumps(activity, default=str)}\n"
         f"Available sources (use ONLY these ids for citations):\n{sources_block}\n"
     )
 
 
 async def synthesize_with_ai(
-    provider: AiProvider, person_data: dict, career: dict, sources: list[Source]
+    provider: AiProvider,
+    person_data: dict,
+    career: dict,
+    activity: list[dict],
+    sources: list[Source],
 ) -> tuple[ProspectBrief, dict]:
     """Raises on failure — caller is responsible for falling back to
     rule-based synthesis. Returns (brief, metadata) where metadata has
     provider/model/usage for cost tracking."""
-    prompt = build_prompt(person_data, career, sources)
+    prompt = build_prompt(person_data, career, activity, sources)
 
     last_error: Exception | None = None
     for attempt in range(2):  # one retry on invalid structured output
@@ -113,11 +139,33 @@ async def synthesize_with_ai(
     raise AiProviderError(f"AI synthesis produced invalid output twice: {last_error}")
 
 
-def rule_based_synthesis(person_data: dict | None, career: dict, sources: list[Source]) -> tuple[ProspectBrief, dict]:
-    """The original deterministic fallback — identical behavior to before
-    AI synthesis existed, used whenever no AI provider is configured or
-    the AI path fails."""
-    snapshot = []
+def rule_based_synthesis(
+    person_data: dict | None,
+    career: dict,
+    activity: list[dict],
+    sources: list[Source],
+) -> tuple[ProspectBrief, dict]:
+    """The deterministic fallback used whenever no AI provider is configured
+    or the AI path fails. career_timeline and activity are structured data
+    collected by earlier stages (not synthesized prose), so they're passed
+    through verbatim here rather than summarised. The one piece of real work
+    this function does is making sure every source_id those entries carry
+    actually resolves to an entry in the sources list it returns — citation_
+    validator applies a strict all-or-nothing rule to CareerEntry/ActivityItem,
+    so a dangling source_id (e.g. the "profile" source id that earlier stages
+    reference but never add to the shared sources list) would otherwise wipe
+    the entire section out silently.
+    """
+    all_sources = list(sources)
+    known_ids = {s.id for s in all_sources}
+
+    def ensure_source(source_id: str, url: str | None) -> None:
+        if source_id not in known_ids:
+            all_sources.append(Source(id=source_id, url=url or "manual-entry"))
+            known_ids.add(source_id)
+
+    snapshot: list[Claim] = []
+    current_role: list[Claim] = []
     if person_data:
         text = person_data.get("full_name", "Unknown")
         if person_data.get("headline"):
@@ -125,25 +173,62 @@ def rule_based_synthesis(person_data: dict | None, career: dict, sources: list[S
         snapshot.append(
             Claim(text=text, is_inference=True, source_ids=[], confidence=Confidence.HIGH)
         )
-
-    career_claims = []
-    if career.get("total_months_experience"):
-        career_claims.append(
-            Claim(
-                text=f"Approximately {career['total_months_experience']} months of tracked experience.",
-                is_inference=True,
-                confidence=Confidence.MEDIUM,
+        if person_data.get("headline"):
+            current_role.append(
+                Claim(
+                    text=person_data["headline"],
+                    is_inference=True,
+                    source_ids=[],
+                    confidence=Confidence.MEDIUM,
+                )
             )
-        )
 
-    hooks = [Hook(text=f"Mentioned in: {s.title or s.url}", source_ids=[s.id]) for s in sources[:7]]
+    profile_url = (person_data or {}).get("linkedin_url")
+
+    career_timeline: list[CareerEntry] = []
+    for entry in career.get("career_timeline", []):
+        source_ids = entry.get("source_ids", [])
+        for sid in source_ids:
+            ensure_source(sid, profile_url)
+        career_timeline.append(CareerEntry.model_validate(entry))
+
+    activity_items: list[ActivityItem] = []
+    for item in activity:
+        source_ids = list(item.get("source_ids", []))
+        if not source_ids:
+            # Activity items carry their own url even when no source_id was
+            # wired up by the collecting stage — mint a source for it rather
+            # than lose the entry to citation_validator's strict rule.
+            fallback_id = f"activity-{len(all_sources)}"
+            ensure_source(fallback_id, item.get("url"))
+            source_ids = [fallback_id]
+        else:
+            for sid in source_ids:
+                ensure_source(sid, item.get("url"))
+        activity_items.append(ActivityItem.model_validate({**item, "source_ids": source_ids}))
+
+    missing_information: list[str] = []
+    if not career_timeline:
+        missing_information.append("No career timeline could be derived without AI synthesis")
+    if not activity_items:
+        missing_information.append("No activity could be derived without AI synthesis")
+    missing_information.append("No company overview could be derived without AI synthesis")
+    missing_information.append("No recurring themes could be derived without AI synthesis")
+    missing_information.append("No company context could be derived without AI synthesis")
+    missing_information.append("No expertise summary could be derived without AI synthesis")
+    missing_information.append("No communication style assessment could be derived without AI synthesis")
+    missing_information.append("No likely priorities could be derived without AI synthesis")
+    missing_information.append("No personalization hooks could be derived without AI synthesis")
 
     brief = ProspectBrief(
         prospect_name=person_data.get("full_name", "Unknown") if person_data else "Unknown",
         snapshot=snapshot,
-        career_story=career_claims,
-        sources=sources,
-        hooks=hooks,
+        current_role=current_role,
+        career_timeline=career_timeline,
+        activity=activity_items,
+        sources=all_sources,
+        outreach_strategy=OutreachStrategy(angle=None),
+        research_gaps=ResearchGaps(missing_information=missing_information),
     )
     metadata = {
         "synthesis_method": "rule_based",
