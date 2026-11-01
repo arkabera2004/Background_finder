@@ -26,6 +26,22 @@ from app.schemas.brief import (
 from app.services.citation_validator import validate_brief
 
 _NAME_PATTERN = re.compile(r"\b([A-Z][a-z]+(?:\s[A-Z][a-z]+){1,2})\b")
+
+# Deterministic education fallback (F7): when the profile provider gives no
+# structured education (e.g. a thin/partial scrape, or pasted text), scan
+# whatever source text the pipeline already collected for well-known
+# institution name patterns rather than reporting "not found" when the
+# press coverage already in hand plainly states it.
+_INSTITUTION_PATTERNS = [
+    re.compile(r"\b(IIM|IIT|NIT)\s+([A-Z][a-zA-Z]+)\b"),
+    re.compile(r"\bMNNIT(?:\s+Allahabad)?\b"),
+    re.compile(r"\bBITS\s+Pilani\b"),
+    re.compile(
+        r"\b([A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+){0,3}\s"
+        r"(?:University|Institute of Technology|College of Engineering))\b"
+    ),
+]
+_DEGREE_PATTERN = re.compile(r"\b(MBA|B\.?Tech\.?|M\.?Tech\.?|PhD|B\.?E\.?|M\.?S\.?|MCA|BCA)\b")
 _STOPWORD_STARTS = {
     "The",
     "This",
@@ -87,8 +103,39 @@ def build_identity_verification(
     )
 
 
+def extract_education_from_sources(sources: list[Source]) -> list[dict]:
+    """Regex fallback over source titles/excerpts for well-known institution
+    names, used only when the profile provider gave no structured education
+    data. Each match is cited to the source it was found in and marked
+    "approximate" precision since no dates are extracted this way."""
+    seen: set[str] = set()
+    records: list[dict] = []
+    for s in sources:
+        text = f"{s.title or ''} {s.excerpt or ''}"
+        if not text.strip():
+            continue
+        for pattern in _INSTITUTION_PATTERNS:
+            for match in pattern.finditer(text):
+                institution = match.group(0).strip()
+                key = institution.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                degree_match = _DEGREE_PATTERN.search(text)
+                records.append(
+                    {
+                        "institution": institution,
+                        "degree": degree_match.group(0) if degree_match else None,
+                        "source_id": s.id,
+                    }
+                )
+    return records
+
+
 def build_education_entries(
-    education_records: list[dict], profile_source_id: str | None
+    education_records: list[dict],
+    profile_source_id: str | None,
+    fallback_sources: list[Source] | None = None,
 ) -> list[EducationEntry]:
     entries = []
     source_ids = [profile_source_id] if profile_source_id else []
@@ -107,6 +154,20 @@ def build_education_entries(
                 else DatePrecision.UNKNOWN,
                 source_ids=source_ids,
                 confidence=Confidence.MEDIUM,
+            )
+        )
+
+    if entries or not fallback_sources:
+        return entries
+
+    for rec in extract_education_from_sources(fallback_sources):
+        entries.append(
+            EducationEntry(
+                institution=rec["institution"],
+                degree=rec.get("degree"),
+                date_precision=DatePrecision.UNKNOWN,
+                source_ids=[rec["source_id"]] if rec.get("source_id") else [],
+                confidence=Confidence.LOW,
             )
         )
     return entries
@@ -272,7 +333,7 @@ def enrich_brief(
     activity: list[dict],
 ) -> ProspectBrief:
     identity_verification = build_identity_verification(person_data, linkedin_url)
-    education = build_education_entries(education_records, profile_source_id)
+    education = build_education_entries(education_records, profile_source_id, brief.sources)
     company_profiles = build_company_profiles(brief, company_research)
     detailed_summary = build_detailed_summary(brief)
     same_name_people, sources_with_namesakes = build_same_name_people(
