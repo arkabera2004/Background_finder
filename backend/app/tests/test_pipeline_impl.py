@@ -437,6 +437,56 @@ async def test_research_company_stage_searches_for_news_and_tags_source_types():
 
 
 @pytest.mark.asyncio
+async def test_research_company_stage_drops_crawled_pages_that_dont_mention_the_company():
+    """Defense in depth (F5): even a domain that passed the aggregator
+    blocklist could be a multi-company directory — a crawled page that
+    never actually mentions the company must be dropped, not kept as a
+    "company website" source."""
+    from app.providers.company_crawler import CrawledPage
+    from app.providers.search_provider import SearchResult
+    from app.schemas.profile import Person
+
+    class _DirectoryCrawler:
+        name = "fake-directory"
+
+        async def crawl(self, domain: str, max_pages: int = 15):
+            return [
+                CrawledPage(
+                    url=f"https://{domain}/acme-robotics",
+                    title="Acme Robotics",
+                    text="Acme Robotics builds industrial robots.",
+                ),
+                CrawledPage(
+                    url=f"https://{domain}/wibe-group",
+                    title="Wibe Group",
+                    text="Wibe Group is a logistics company in Rotterdam.",
+                ),
+            ]
+
+    search = _FakeSearchProvider(
+        [
+            SearchResult(
+                url="https://acmerobotics.com/about",
+                title="Acme Robotics - Official Website",
+                snippet="Acme Robotics builds industrial robots.",
+            )
+        ]
+    )
+    stage = ResearchCompanyStage(_DirectoryCrawler(), search=search)
+    ctx = StageContext(run_id="r-directory", depth="standard")
+    ctx.outputs["_person"] = Person(
+        full_name="Jane Doe", current_company="Acme Robotics", source="manual"
+    )
+
+    result = await stage.run(ctx)
+
+    urls = {s["url"] for s in result.sources}
+    assert "https://acmerobotics.com/acme-robotics" in urls
+    assert "https://acmerobotics.com/wibe-group" not in urls
+    assert result.output["pages_crawled"] == 1
+
+
+@pytest.mark.asyncio
 async def test_analyse_activity_stage_classifies_mixed_post_types():
     # NOTE: at the time this task was implemented, app.stages.impl cannot be
     # imported under pytest because app.services.ai_brief_synthesizer still

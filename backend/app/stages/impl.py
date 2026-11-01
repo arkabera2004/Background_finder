@@ -17,7 +17,7 @@ from app.services.activity_classifier import classify_activity, is_byline_match
 from app.services.ai_brief_synthesizer import rule_based_synthesis, synthesize_with_ai
 from app.services.brief_enrichment import enrich_brief
 from app.services.career_analysis import analyse_career, build_career_timeline
-from app.services.company_discovery import discover_company_domain
+from app.services.company_discovery import discover_company_domain, page_mentions_company
 from app.services.identity_attribution import (
     augment_fingerprint_with_mentions,
     build_fingerprint,
@@ -142,6 +142,11 @@ class ResearchCompanyStage(Stage):
                 sources=[],
             )
         pages = await self.crawler.crawl(domain)
+        # Defense in depth against F5-class noise: even a domain that
+        # passed the aggregator blocklist could turn out to be a
+        # multi-company directory — drop any crawled page that doesn't
+        # actually mention the company.
+        relevant_pages = [p for p in pages if page_mentions_company(company, p.title, p.text)]
         website_sources = [
             {
                 "url": p.url,
@@ -149,7 +154,7 @@ class ResearchCompanyStage(Stage):
                 "excerpt": p.text[:280],
                 "source_type": "company_website",
             }
-            for p in pages
+            for p in relevant_pages
         ]
 
         news_results = await self.search.search(
@@ -170,7 +175,7 @@ class ResearchCompanyStage(Stage):
             output={
                 "company": company,
                 "domain_guess": domain,
-                "pages_crawled": len(pages),
+                "pages_crawled": len(relevant_pages),
                 "recent_news_count": len(news_results),
             },
             sources=website_sources + news_sources,

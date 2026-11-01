@@ -64,6 +64,15 @@ def _tokens(text: str) -> set[str]:
     return set(_TOKEN_RE.findall(text.lower()))
 
 
+def page_mentions_company(company_name: str, title: str | None, snippet: str | None) -> bool:
+    """Public wrapper for the same distinctive-token check used to pick the
+    company's domain — reused by ResearchCompanyStage to filter crawled
+    pages (defense in depth: even a domain that passed the aggregator
+    blocklist could still be a multi-company directory not on that list;
+    a page that never actually mentions the company shouldn't be kept)."""
+    return _plausible_match(company_name, title, snippet)
+
+
 def _plausible_match(company_name: str, title: str | None, snippet: str | None) -> bool:
     company_tokens = _tokens(company_name)
     distinctive_tokens = company_tokens - _GENERIC_TOKENS
