@@ -87,12 +87,15 @@ function ClaimList({
   sourcesById: Map<string, BriefSource>;
   emptyText?: string;
 }) {
-  if (claims.length === 0) {
+  // A claim with no real text has nothing for a confidence/inference badge
+  // to describe — drop it rather than render a badge over blank content.
+  const visible = claims.filter((c) => c.text.trim().length > 0);
+  if (visible.length === 0) {
     return <EmptySection text={emptyText} />;
   }
   return (
     <ul className="space-y-2">
-      {claims.map((claim, i) => (
+      {visible.map((claim, i) => (
         <li key={i} className="text-sm">
           <span>{claim.text}</span>
           {claim.date && <span className="ml-1 text-xs text-muted-foreground">({claim.date})</span>}
@@ -564,10 +567,16 @@ export function BriefView({ brief }: { brief: ProspectBrief }) {
 
       {/* 9. Research, Expertise & Professional Interests */}
       <Section title="Research, Expertise & Professional Interests">
-        <div className="space-y-4">
-          <ClaimList claims={brief.expertise} sourcesById={sourcesById} />
-          <ClaimList claims={brief.recurring_themes} sourcesById={sourcesById} />
-        </div>
+        {brief.expertise.length === 0 && brief.recurring_themes.length === 0 ? (
+          <EmptySection text="No expertise or recurring themes were found." />
+        ) : (
+          <div className="space-y-4">
+            {brief.expertise.length > 0 && <ClaimList claims={brief.expertise} sourcesById={sourcesById} />}
+            {brief.recurring_themes.length > 0 && (
+              <ClaimList claims={brief.recurring_themes} sourcesById={sourcesById} />
+            )}
+          </div>
+        )}
       </Section>
 
       <Section title="Company Context">
