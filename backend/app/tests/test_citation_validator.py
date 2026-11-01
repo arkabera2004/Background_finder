@@ -3,9 +3,12 @@ from app.schemas.brief import (
     ActivityType,
     CareerEntry,
     Claim,
+    CompanyProfile,
     OutreachStrategy,
     PersonalizationHook,
     ProspectBrief,
+    RelatedPersonality,
+    SameNameMatch,
     Source,
 )
 from app.services.citation_validator import has_enough_hooks, validate_brief
@@ -156,3 +159,63 @@ def test_claim_with_inference_survives_in_company_context():
     cleaned = validate_brief(brief)
     assert len(cleaned.company_context) == 1
     assert cleaned.company_context[0].text == "Likely scaling up"
+
+
+def test_drops_unsourced_company_profile():
+    brief = _brief(
+        sources=[Source(id="s1", url="https://acme.example")],
+        company_profiles=[
+            CompanyProfile(name="Acme", what_they_do="Widgets", source_ids=["s1"]),
+            CompanyProfile(name="Fabco", what_they_do="Fabricated", source_ids=["fake"]),
+        ],
+    )
+    cleaned = validate_brief(brief)
+    assert [c.name for c in cleaned.company_profiles] == ["Acme"]
+
+
+def test_drops_unsourced_same_name_match():
+    brief = _brief(
+        sources=[Source(id="s1", url="https://example.com/namesake")],
+        same_name_people=[
+            SameNameMatch(
+                name="Jane Doe",
+                identity_summary="CEO of a different company",
+                why_confusable="Same name",
+                why_different="Different employer",
+                source_ids=["s1"],
+            ),
+            SameNameMatch(
+                name="Jane Doe",
+                identity_summary="Fabricated",
+                why_confusable="x",
+                why_different="y",
+                source_ids=["fake"],
+            ),
+        ],
+    )
+    cleaned = validate_brief(brief)
+    assert len(cleaned.same_name_people) == 1
+    assert cleaned.same_name_people[0].identity_summary == "CEO of a different company"
+
+
+def test_drops_unsourced_related_personality():
+    brief = _brief(
+        sources=[Source(id="s1", url="https://example.com/colleague")],
+        related_personalities=[
+            RelatedPersonality(
+                name="John Smith",
+                connection_type="colleague",
+                evidence="Co-authored a report together",
+                source_ids=["s1"],
+            ),
+            RelatedPersonality(
+                name="Fake Person",
+                connection_type="colleague",
+                evidence="Fabricated",
+                source_ids=["fake"],
+            ),
+        ],
+    )
+    cleaned = validate_brief(brief)
+    assert len(cleaned.related_personalities) == 1
+    assert cleaned.related_personalities[0].name == "John Smith"

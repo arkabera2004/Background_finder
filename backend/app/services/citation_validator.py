@@ -1,4 +1,14 @@
-from app.schemas.brief import ActivityItem, CareerEntry, Claim, PersonalizationHook, ProspectBrief
+from app.schemas.brief import (
+    ActivityItem,
+    CareerEntry,
+    Claim,
+    CompanyProfile,
+    EducationEntry,
+    PersonalizationHook,
+    ProspectBrief,
+    RelatedPersonality,
+    SameNameMatch,
+)
 
 MIN_HOOKS = 3
 
@@ -55,18 +65,56 @@ def validate_brief(brief: ProspectBrief) -> ProspectBrief:
                 kept.append(h.model_copy(update={"source_ids": valid}))
         return kept
 
+    def clean_education(entries: list[EducationEntry]) -> list[EducationEntry]:
+        kept = []
+        for e in entries:
+            valid = _valid_source_ids(e.source_ids, known_ids)
+            if valid:
+                kept.append(e.model_copy(update={"source_ids": valid}))
+        return kept
+
+    def clean_company_profiles(entries: list[CompanyProfile]) -> list[CompanyProfile]:
+        kept = []
+        for e in entries:
+            valid = _valid_source_ids(e.source_ids, known_ids)
+            if valid:
+                kept.append(e.model_copy(update={"source_ids": valid}))
+        return kept
+
+    def clean_same_name(entries: list[SameNameMatch]) -> list[SameNameMatch]:
+        kept = []
+        for e in entries:
+            valid = _valid_source_ids(e.source_ids, known_ids)
+            if valid:
+                kept.append(e.model_copy(update={"source_ids": valid}))
+        return kept
+
+    def clean_related_personalities(entries: list[RelatedPersonality]) -> list[RelatedPersonality]:
+        kept = []
+        for e in entries:
+            valid = _valid_source_ids(e.source_ids, known_ids)
+            if valid:
+                kept.append(e.model_copy(update={"source_ids": valid}))
+        return kept
+
     return brief.model_copy(
         update={
             "snapshot": clean_claims(brief.snapshot),
+            "detailed_summary": clean_claims(brief.detailed_summary),
+            "education": clean_education(brief.education),
             "current_role": clean_claims(brief.current_role),
             "company_overview": clean_claims(brief.company_overview),
+            "company_profiles": clean_company_profiles(brief.company_profiles),
             "career_timeline": clean_career_entries(brief.career_timeline),
+            "achievements": clean_claims(brief.achievements),
             "expertise": clean_claims(brief.expertise),
             "activity": clean_activity_items(brief.activity),
             "recurring_themes": clean_claims(brief.recurring_themes),
             "company_context": clean_claims(brief.company_context),
             "communication_style": clean_claims(brief.communication_style),
             "likely_priorities": clean_claims(brief.likely_priorities),
+            "same_name_people": clean_same_name(brief.same_name_people),
+            "related_personalities": clean_related_personalities(brief.related_personalities),
             "personalization_hooks": clean_hooks(brief.personalization_hooks),
         }
     )
