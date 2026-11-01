@@ -194,14 +194,21 @@ export interface ProspectBrief {
   _synthesis_metadata?: SynthesisMetadata;
 }
 
+export interface IdentityCandidate {
+  linkedin_url: string;
+  title: string | null;
+  snippet: string | null;
+}
+
 export interface RunView {
   id: string;
-  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  status: "pending" | "running" | "needs_identity_selection" | "completed" | "failed" | "cancelled";
   depth: string;
   steps: Record<string, RunStepView>;
   brief: ProspectBrief | null;
   created_at: string;
   completed_at: string | null;
+  identity_candidates: IdentityCandidate[];
 }
 
 export interface Prospect {
@@ -235,6 +242,11 @@ export const api = {
       body: JSON.stringify(body),
     }),
   getRun: (runId: string) => request<RunView>(`/runs/${runId}`),
+  selectIdentity: (runId: string, linkedinUrl: string) =>
+    request<{ run_id: string; status: string }>(
+      `/runs/${runId}/select-identity?linkedin_url=${encodeURIComponent(linkedinUrl)}`,
+      { method: "POST" }
+    ),
   cancelRun: (runId: string) =>
     request<{ run_id: string; status: string }>(`/runs/${runId}/cancel`, { method: "POST" }),
   retryRun: (runId: string) =>

@@ -54,6 +54,11 @@ export default function RunDetailPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["run", runId] }),
   });
 
+  const selectIdentityMutation = useMutation({
+    mutationFn: (linkedinUrl: string) => api.selectIdentity(runId, linkedinUrl),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["run", runId] }),
+  });
+
   const retryMutation = useMutation({
     mutationFn: () => api.retryRun(runId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["run", runId] }),
@@ -100,6 +105,37 @@ export default function RunDetailPage() {
           ))}
         </CardContent>
       </Card>
+
+      {run.status === "needs_identity_selection" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Which person did you mean?</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {run.identity_candidates.map((candidate) => (
+              <div
+                key={candidate.linkedin_url}
+                className="flex items-center justify-between gap-4 rounded-md border p-3 text-sm"
+              >
+                <div>
+                  <div className="font-medium">{candidate.title ?? candidate.linkedin_url}</div>
+                  {candidate.snippet && (
+                    <div className="text-muted-foreground">{candidate.snippet}</div>
+                  )}
+                  <div className="text-xs text-muted-foreground">{candidate.linkedin_url}</div>
+                </div>
+                <Button
+                  size="sm"
+                  disabled={selectIdentityMutation.isPending}
+                  onClick={() => selectIdentityMutation.mutate(candidate.linkedin_url)}
+                >
+                  Select
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {run.status === "running" && (
         <Button variant="outline" onClick={() => cancelMutation.mutate()} disabled={cancelMutation.isPending}>
