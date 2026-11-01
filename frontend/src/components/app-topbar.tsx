@@ -24,16 +24,17 @@ export function AppTopbar({ email }: { email: string | null }) {
   }
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-border px-4">
-      <SidebarTrigger />
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-muted)] bg-[var(--surface-container)] px-4">
+      <SidebarTrigger className="icon-tertiary hover:icon-secondary" />
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"
           size="icon"
+          className="rounded-full icon-tertiary hover:bg-[var(--surface-raised-x2)] hover:icon-secondary"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         >
-          <Sun className="h-4 w-4 dark:hidden" />
-          <Moon className="hidden h-4 w-4 dark:block" />
+          <Sun size={16} strokeWidth={1.75} className="dark:hidden" />
+          <Moon size={16} strokeWidth={1.75} className="hidden dark:block" />
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -41,7 +42,7 @@ export function AppTopbar({ email }: { email: string | null }) {
               <Avatar className="h-6 w-6">
                 <AvatarFallback>{(email ?? "?")[0]?.toUpperCase()}</AvatarFallback>
               </Avatar>
-              <span className="text-sm text-muted-foreground">{email ?? "Account"}</span>
+              <span className="text-sm text-[var(--text-tertiary)]">{email ?? "Account"}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

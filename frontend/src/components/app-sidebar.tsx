@@ -4,15 +4,18 @@ import { Building2, LayoutDashboard, PlusCircle, Settings, Users } from "lucide-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { Logo } from "@/components/logo";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 
 const NAV = [
@@ -20,16 +23,17 @@ const NAV = [
   { href: "/research/new", label: "New Research", icon: PlusCircle },
   { href: "/prospects", label: "Prospects", icon: Users },
   { href: "/companies", label: "Companies", icon: Building2 },
-  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { state } = useSidebar();
+  const expanded = state === "expanded";
 
   return (
-    <Sidebar>
-      <SidebarHeader className="px-4 py-3 font-display text-base tracking-tight">
-        ProspectLens
+    <Sidebar collapsible="icon" className="border-[var(--stroke-muted)]">
+      <SidebarHeader className="h-14 justify-center border-b border-[var(--stroke-muted)] px-4">
+        <Logo wordmark={expanded} />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
@@ -37,9 +41,9 @@ export function AppSidebar() {
             <SidebarMenu>
               {NAV.map(({ href, label, icon: Icon }) => (
                 <SidebarMenuItem key={href}>
-                  <SidebarMenuButton asChild isActive={pathname.startsWith(href)}>
+                  <SidebarMenuButton asChild isActive={pathname.startsWith(href)} tooltip={label}>
                     <Link href={href}>
-                      <Icon className="h-4 w-4" />
+                      <Icon size={16} strokeWidth={1.75} />
                       <span>{label}</span>
                     </Link>
                   </SidebarMenuButton>
@@ -49,6 +53,18 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter className="border-t border-[var(--stroke-muted)]">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname.startsWith("/settings")} tooltip="Settings">
+              <Link href="/settings">
+                <Settings size={16} strokeWidth={1.75} />
+                <span>Settings</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   );
 }

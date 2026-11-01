@@ -133,3 +133,52 @@
     @apply font-sans;
   }
 }
+
+/* =============================================================
+   CHRONOS VISUAL POLISH — ported 1:1 (icon-color utilities, thin
+   themed scrollbar, selection color, tabular numerals).
+   ============================================================= */
+
+@utility icon-primary {
+  color: var(--icon-primary);
+}
+@utility icon-secondary {
+  color: var(--icon-secondary);
+}
+@utility icon-tertiary {
+  color: var(--icon-tertiary);
+}
+@utility icon-quaternary {
+  color: var(--icon-quaternary);
+}
+@utility icon-on-color {
+  color: var(--icon-on-color);
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--stroke-active);
+  color: var(--text-primary);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-scroll-bar) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--surface-scroll-bar);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
