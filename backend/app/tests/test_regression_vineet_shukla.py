@@ -101,15 +101,26 @@ def _web_footprint_results() -> dict[str, list[SearchResult]]:
                     "Head based in the UAE, spoke about Global Capability Centers."
                 ),
             ),
-            # [activity-26]/[namesake-13] in the audit: no corroborating or
-            # conflicting detail at all. Correct answer: Unverified, excluded.
+            # [activity-26] in the follow-up audit: a different person — a
+            # PayPal Consumer Credit/Risk Strategy mentor — with no
+            # corroborating or conflicting detail against the fingerprint.
+            # Correct answer: Unverified (or Namesake if a conflict is
+            # known), never Subject.
             SearchResult(
                 url="https://topmate.io/vineet_shukla91",
-                title="Vineet Shukla — Interview prep & tips",
-                snippet="Book a session with Vineet Shukla for interview prep and career tips.",
+                title="Vineet Shukla — Risk Strategy Mentor, PayPal Consumer Credit",
+                snippet="Book a mentoring session on risk strategy with Vineet Shukla, PayPal.",
             ),
         ],
         "article OR publication": [
+            # A second, distinct Topmate page about the same PayPal mentor
+            # surfaced via a different query — must land in the SAME bucket
+            # as the item above, not Subject.
+            SearchResult(
+                url="https://topmate.io/sessions/vineet_shukla91/risk-strategy",
+                title="1:1 with Vineet Shukla — PayPal Risk Strategy",
+                snippet="Vineet Shukla mentors on consumer credit and risk strategy at PayPal.",
+            ),
             # [namesake-10] in the audit: the subject's own appointment
             # announcement, also wrongly rejected previously. Correct
             # answer: Subject.
@@ -122,7 +133,24 @@ def _web_footprint_results() -> dict[str, list[SearchResult]]:
                 ),
             ),
         ],
-        "talk OR conference OR webinar": [],
+        "talk OR conference OR webinar": [
+            # [namesake-11] in the follow-up audit: an MNNIT E-Summit
+            # Instagram post naming the subject as "CTO, Founder" with
+            # 20+ years in AI/GenAI/data — the freshest source, and the
+            # only one hinting at the Wayam AI founder role. Previously
+            # rejected for not mentioning JoulestoWatts. Correct answer:
+            # Subject, via the full career/education fingerprint, not one
+            # stale employer.
+            SearchResult(
+                url="https://instagram.com/p/mnnit-esummit-renaissance-2026",
+                title="MNNIT E-Summit: Renaissance 2026 — featuring Vineet Shukla",
+                snippet=(
+                    "Vineet Shukla, CTO, Founder, and MNNIT Allahabad alumnus, "
+                    "shares 20+ years of experience in AI, GenAI, and data at "
+                    "this year's E-Summit."
+                ),
+            ),
+        ],
     }
 
 
@@ -174,9 +202,16 @@ async def test_vineet_shukla_regression_fixture_matches_audit_acceptance_criteri
     assert "https://entrepreneurme.example/gitex-2025-hcltech" in same_name_urls
     assert "https://entrepreneurme.example/gitex-2025-hcltech" not in activity_urls
 
-    # [ ] activity-26/[s21] and [namesake-13] classified as Unverified and excluded
+    # [ ] activity-26 (PayPal Topmate mentor) classified as Unverified/
+    #     Namesake, never Subject — and the second PayPal page found via a
+    #     different query lands in the exact same bucket (not Subject
+    #     either), so the same real person isn't split across buckets.
     assert "https://topmate.io/vineet_shukla91" not in activity_urls
-    assert "https://topmate.io/vineet_shukla91" not in same_name_urls
+    assert "https://topmate.io/sessions/vineet_shukla91/risk-strategy" not in activity_urls
+
+    # [ ] namesake-11 (MNNIT E-Summit Instagram post) classified as Subject
+    #     via the full career/education fingerprint, not one stale employer
+    assert "https://instagram.com/p/mnnit-esummit-renaissance-2026" in activity_urls
 
     # [ ] No item appears in more than one bucket
     assert activity_urls.isdisjoint(same_name_urls)

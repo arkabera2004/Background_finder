@@ -34,6 +34,29 @@ from dataclasses import dataclass, field
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
+# Shared with brief_enrichment.py's education fallback: well-known
+# institution name patterns, used both to extract a deterministic
+# education section and — here — to bootstrap the identity fingerprint
+# itself when the profile provider gave no education data at all.
+INSTITUTION_PATTERNS = [
+    re.compile(r"\b(IIM|IIT|NIT)\s+([A-Z][a-zA-Z]+)\b"),
+    re.compile(r"\bMNNIT(?:\s+Allahabad)?\b"),
+    re.compile(r"\bBITS\s+Pilani\b"),
+    re.compile(
+        r"\b([A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+){0,3}\s"
+        r"(?:University|Institute of Technology|College of Engineering))\b"
+    ),
+]
+DEGREE_PATTERN = re.compile(r"\b(MBA|B\.?Tech\.?|M\.?Tech\.?|PhD|B\.?E\.?|M\.?S\.?|MCA|BCA)\b")
+
+
+def extract_institution_mentions(text: str) -> set[str]:
+    found: set[str] = set()
+    for pattern in INSTITUTION_PATTERNS:
+        for match in pattern.finditer(text):
+            found.add(match.group(0).strip())
+    return found
+
 # Common job-title/business words that appear across unrelated roles and
 # companies — a match on only these is not real corroboration (e.g. "head"
 # in "Business Head" vs. "Head of Data" is a coincidence, not evidence).
@@ -124,6 +147,24 @@ def build_fingerprint(
         schools=schools,
         location=location,
     )
+
+
+def augment_fingerprint_with_mentions(fp: IdentityFingerprint, texts: list[str]) -> None:
+    """Bootstraps the fingerprint's schools from the run's own search
+    results when the profile provider returned none (a thin/stale
+    snapshot). Only scans text that already mentions the subject's name —
+    an institution mentioned in a result about someone else must not leak
+    into this fingerprint. Mutates fp in place; call before scoring.
+
+    This is what lets a fresh, high-signal source (e.g. an alumni-event
+    post naming the subject's school and "Founder" title) correct a stale
+    profile snapshot instead of being rejected by it — the exact failure
+    an audit flagged as "namesake-11 must be Subject"."""
+    name_lower = fp.name.lower()
+    for text in texts:
+        if not text or name_lower not in text.lower():
+            continue
+        fp.schools |= extract_institution_mentions(text)
 
 
 def score_item(text: str, fp: IdentityFingerprint) -> tuple[str, int]:

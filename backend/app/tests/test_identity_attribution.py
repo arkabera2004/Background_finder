@@ -1,5 +1,6 @@
 from app.schemas.profile import EducationRecord, Experience
 from app.services.identity_attribution import (
+    augment_fingerprint_with_mentions,
     build_fingerprint,
     canonical_url,
     normalized_title,
@@ -65,6 +66,30 @@ def test_text_not_mentioning_the_name_is_dropped():
     fp = _fp()
     verdict, _ = score_item("JoulestoWatts announces a new product launch", fp)
     assert verdict == "drop"
+
+
+def test_augment_fingerprint_recovers_fresh_item_a_thin_profile_would_reject():
+    """Regression: namesake-11 in the audit — an MNNIT Allahabad alumni-event
+    post naming the subject as "CTO, Founder" was rejected because the
+    profile snapshot had no education data at all. Scanning the run's own
+    results for institution mentions co-occurring with the subject's name
+    must recover this before scoring."""
+    fp = _fp(employers=set(), titles=set(), schools=set())  # simulate a thin snapshot
+    texts = [
+        "Vineet Shukla, CTO, Founder, at the MNNIT E-Summit Renaissance 2026, "
+        "shares 20+ years in AI, GenAI, and data."
+    ]
+    augment_fingerprint_with_mentions(fp, texts)
+    verdict, _ = score_item(texts[0], fp)
+    assert verdict == "subject"
+
+
+def test_augment_fingerprint_ignores_mentions_in_text_without_the_subjects_name():
+    """An institution mentioned in a result about someone else must not
+    leak into the fingerprint."""
+    fp = _fp(employers=set(), titles=set(), schools=set())
+    augment_fingerprint_with_mentions(fp, ["Someone Else graduated from MNNIT Allahabad."])
+    assert fp.schools == set()
 
 
 def test_canonical_url_merges_www_and_in_subdomain_and_query_string():

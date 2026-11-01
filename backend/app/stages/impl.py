@@ -19,6 +19,7 @@ from app.services.brief_enrichment import enrich_brief
 from app.services.career_analysis import analyse_career, build_career_timeline
 from app.services.company_discovery import discover_company_domain
 from app.services.identity_attribution import (
+    augment_fingerprint_with_mentions,
     build_fingerprint,
     canonical_url,
     normalized_title,
@@ -260,6 +261,15 @@ class WebFootprintStage(Stage):
                     continue
                 seen_canonical.add(key)
                 merged.append(r)
+
+        # Bootstrap the fingerprint's schools from the run's own results
+        # before scoring, so a thin/stale profile snapshot with no
+        # education data doesn't cause a fresh, high-signal source (one
+        # that names the subject and their school) to be scored against an
+        # incomplete fingerprint.
+        augment_fingerprint_with_mentions(
+            fp, [f"{r.title or ''} {r.snippet or ''}" for r in merged]
+        )
 
         sources: list[dict] = []
         activity: list[dict] = []

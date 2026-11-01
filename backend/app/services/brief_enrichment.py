@@ -25,24 +25,9 @@ from app.schemas.brief import (
     Source,
 )
 from app.services.citation_validator import validate_brief
+from app.services.identity_attribution import DEGREE_PATTERN, INSTITUTION_PATTERNS
 
 _NAME_PATTERN = re.compile(r"\b([A-Z][a-z]+(?:\s[A-Z][a-z]+){1,2})\b")
-
-# Deterministic education fallback (F7): when the profile provider gives no
-# structured education (e.g. a thin/partial scrape, or pasted text), scan
-# whatever source text the pipeline already collected for well-known
-# institution name patterns rather than reporting "not found" when the
-# press coverage already in hand plainly states it.
-_INSTITUTION_PATTERNS = [
-    re.compile(r"\b(IIM|IIT|NIT)\s+([A-Z][a-zA-Z]+)\b"),
-    re.compile(r"\bMNNIT(?:\s+Allahabad)?\b"),
-    re.compile(r"\bBITS\s+Pilani\b"),
-    re.compile(
-        r"\b([A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+){0,3}\s"
-        r"(?:University|Institute of Technology|College of Engineering))\b"
-    ),
-]
-_DEGREE_PATTERN = re.compile(r"\b(MBA|B\.?Tech\.?|M\.?Tech\.?|PhD|B\.?E\.?|M\.?S\.?|MCA|BCA)\b")
 _STOPWORD_STARTS = {
     "The",
     "This",
@@ -128,14 +113,14 @@ def extract_education_from_sources(sources: list[Source]) -> list[dict]:
         text = f"{s.title or ''} {s.excerpt or ''}"
         if not text.strip():
             continue
-        for pattern in _INSTITUTION_PATTERNS:
+        for pattern in INSTITUTION_PATTERNS:
             for match in pattern.finditer(text):
                 institution = match.group(0).strip()
                 key = institution.lower()
                 if key in seen:
                     continue
                 seen.add(key)
-                degree_match = _DEGREE_PATTERN.search(text)
+                degree_match = DEGREE_PATTERN.search(text)
                 records.append(
                     {
                         "institution": institution,
