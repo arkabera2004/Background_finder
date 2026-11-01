@@ -15,6 +15,7 @@ from app.providers.search_provider import SearchProvider, SearchResult
 from app.schemas.brief import ActivityType, Source
 from app.services.activity_classifier import classify_activity, is_byline_match
 from app.services.ai_brief_synthesizer import rule_based_synthesis, synthesize_with_ai
+from app.services.brief_enrichment import enrich_brief
 from app.services.career_analysis import analyse_career, build_career_timeline
 from app.services.company_discovery import discover_company_domain
 from app.stages.base import Stage, StageContext, StageName, StageResult
@@ -226,14 +227,14 @@ class WebFootprintStage(Stage):
         # to this specific person. Require corroboration against something
         # we already know about them (their company, or a past employer)
         # unless the byline itself names them.
-        known_orgs: set[str] = set()
+        known_orgs: dict[str, str] = {}  # lowercase -> original casing, for display
         current_company = getattr(person, "current_company", None)
         if current_company:
-            known_orgs.add(current_company.lower())
+            known_orgs[current_company.lower()] = current_company
         for exp in getattr(person, "experiences", []) or []:
-            org = getattr(exp, "organization", None)
-            if org:
-                known_orgs.add(org.lower())
+            company = getattr(exp, "company", None)
+            if company:
+                known_orgs[company.lower()] = company
 
         queries = [
             f'"{name}" interview OR podcast',
@@ -253,7 +254,10 @@ class WebFootprintStage(Stage):
 
         sources: list[dict] = []
         activity: list[dict] = []
-        unconfirmed_count = 0
+        # Namesake hits that failed corroboration are not discarded outright
+        # — they're exactly the evidence the "People with the Same Name"
+        # section needs, kept separate from the target's own facts.
+        same_name_candidates: list[dict] = []
         for r in merged:
             text = f"{r.title or ''} {r.snippet or ''}"
             activity_type = classify_activity(text)
@@ -270,7 +274,17 @@ class WebFootprintStage(Stage):
             if not corroborated and known_orgs:
                 # We know who this person's employer(s) are and this result
                 # doesn't mention any of them — likely a namesake, not them.
-                unconfirmed_count += 1
+                same_name_candidates.append(
+                    {
+                        "name": name,
+                        "identity_summary": r.title or r.url,
+                        "distinguishing_info": r.snippet,
+                        "url": r.url,
+                        "why_confusable": f'Shares the full name "{name}" and surfaced in a public search for it.',
+                        "why_different": "Does not mention any of this person's known employers "
+                        f"({', '.join(sorted(known_orgs.values()))}), so is presumed to be a different person.",
+                    }
+                )
                 continue
 
             sources.append({"url": r.url, "title": r.title, "excerpt": r.snippet})
@@ -291,16 +305,22 @@ class WebFootprintStage(Stage):
             )
 
         gaps: list[str] = []
-        if unconfirmed_count:
+        if same_name_candidates:
             gaps.append(
-                f"Found {unconfirmed_count} public mention(s) of people named \"{name}\" "
+                f"Found {len(same_name_candidates)} public mention(s) of people named \"{name}\" "
                 "that could not be confirmed as this person (no match against known "
-                "employer) and were excluded to avoid misattribution."
+                "employer); listed separately under People with the Same Name rather than "
+                "attributed to this person's activity."
             )
 
         return StageResult(
             stage=self.name,
-            output={"footprint_items": len(merged), "activity": activity, "gaps": gaps},
+            output={
+                "footprint_items": len(merged),
+                "activity": activity,
+                "gaps": gaps,
+                "same_name_candidates": same_name_candidates,
+            },
             sources=sources,
         )
 
@@ -399,6 +419,19 @@ class SynthesiseBriefStage(Stage):
             for gap in company_gaps:
                 if gap not in brief.research_gaps.missing_information:
                     brief.research_gaps.missing_information.append(gap)
+
+        brief = enrich_brief(
+            brief,
+            person_data=person_data,
+            linkedin_url=(person_data or {}).get("linkedin_url"),
+            education_records=(person_data or {}).get("education", []),
+            profile_source_id=profile_source.get("id") if profile_source else None,
+            company_research=ctx.outputs.get(StageName.RESEARCH_COMPANY.value),
+            same_name_candidates=ctx.outputs.get(StageName.WEB_FOOTPRINT.value, {}).get(
+                "same_name_candidates", []
+            ),
+            activity=activity,
+        )
 
         output = brief.model_dump()
         output["_synthesis_metadata"] = metadata

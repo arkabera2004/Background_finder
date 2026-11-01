@@ -511,3 +511,40 @@ async def test_web_footprint_excludes_likely_namesakes_when_employer_is_known():
     assert urls == {"https://example.com/real"}
     assert result.output["gaps"]
     assert "Jordan Avery" in result.output["gaps"][0]
+
+    candidates = result.output["same_name_candidates"]
+    assert len(candidates) == 1
+    assert candidates[0]["url"] == "https://example.com/namesake"
+    assert "Acme Robotics" in candidates[0]["why_different"]
+
+
+@pytest.mark.asyncio
+async def test_web_footprint_corroborates_against_past_employer_not_just_current():
+    """Regression: a past employer in person.experiences (field `company`,
+    not `organization`) must count as corroboration too."""
+    from app.providers.search_provider import SearchResult
+    from app.schemas.profile import Experience
+
+    search = _FakeSearchProvider(
+        [
+            SearchResult(
+                url="https://example.com/past-role",
+                title="Jordan Avery on the Globex Corp analytics launch",
+                snippet="Former Globex Corp product lead discusses the rollout",
+            ),
+        ]
+    )
+    stage = WebFootprintStage(search)
+    ctx = StageContext(run_id="r7", depth="standard")
+    ctx.outputs["_person"] = Person(
+        full_name="Jordan Avery",
+        current_company="Acme Robotics",
+        experiences=[Experience(title="Product Manager", company="Globex Corp")],
+        source="manual",
+    )
+
+    result = await stage.run(ctx)
+
+    urls = {item["url"] for item in result.output["activity"]}
+    assert urls == {"https://example.com/past-role"}
+    assert result.output["same_name_candidates"] == []
