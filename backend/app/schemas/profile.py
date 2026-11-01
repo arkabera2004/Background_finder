@@ -16,11 +16,20 @@ class Post(BaseModel):
     url: str | None = None
 
 
+class EducationRecord(BaseModel):
+    institution: str
+    degree: str | None = None
+    field: str | None = None
+    start_date: str | None = None  # "YYYY-MM" or "YYYY"
+    end_date: str | None = None
+
+
 class Person(BaseModel):
     full_name: str
     headline: str | None = None
     current_company: str | None = None
     linkedin_url: str | None = None
     experiences: list[Experience] = []
+    education: list[EducationRecord] = []
     posts: list[Post] = []
     source: str  # provider name that produced this record

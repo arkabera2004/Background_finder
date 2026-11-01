@@ -116,6 +116,10 @@
           "default": null,
           "title": "End Date"
         },
+        "date_precision": {
+          "$ref": "#/$defs/DatePrecision",
+          "default": "unknown"
+        },
         "description": {
           "anyOf": [
             {
@@ -190,6 +194,140 @@
       "title": "Claim",
       "type": "object"
     },
+    "CompanyProfile": {
+      "description": "Per-organization detail for the Company-by-Company Overview section \u2014\none entry per company in the career timeline, not a generic description.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "website": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Website"
+        },
+        "what_they_do": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "What They Do"
+        },
+        "industry": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Industry"
+        },
+        "person_role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Person Role"
+        },
+        "role_scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role Scope"
+        },
+        "related_projects": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Related Projects",
+          "type": "array"
+        },
+        "start_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Date"
+        },
+        "end_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Date"
+        },
+        "date_precision": {
+          "$ref": "#/$defs/DatePrecision",
+          "default": "unknown"
+        },
+        "source_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence",
+          "default": "medium"
+        },
+        "uncertainty_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Uncertainty Note"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "CompanyProfile",
+      "type": "object"
+    },
     "Confidence": {
       "enum": [
         "high",
@@ -198,6 +336,143 @@
       ],
       "title": "Confidence",
       "type": "string"
+    },
+    "ConnectionStrength": {
+      "enum": [
+        "confirmed",
+        "possible"
+      ],
+      "title": "ConnectionStrength",
+      "type": "string"
+    },
+    "DatePrecision": {
+      "enum": [
+        "exact",
+        "approximate",
+        "unknown"
+      ],
+      "title": "DatePrecision",
+      "type": "string"
+    },
+    "EducationEntry": {
+      "properties": {
+        "institution": {
+          "title": "Institution",
+          "type": "string"
+        },
+        "degree": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Degree"
+        },
+        "field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field"
+        },
+        "start_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Date"
+        },
+        "end_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Date"
+        },
+        "date_precision": {
+          "$ref": "#/$defs/DatePrecision",
+          "default": "unknown"
+        },
+        "source_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence",
+          "default": "medium"
+        }
+      },
+      "required": [
+        "institution"
+      ],
+      "title": "EducationEntry",
+      "type": "object"
+    },
+    "IdentityVerification": {
+      "description": "What anchored identity resolution and how confident we are that every\nother section describes this one person, not a namesake.",
+      "properties": {
+        "profile_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Profile Url"
+        },
+        "matched_identifiers": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Matched Identifiers",
+          "type": "array"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence",
+          "default": "medium"
+        },
+        "limitations": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Limitations"
+        }
+      },
+      "title": "IdentityVerification",
+      "type": "object"
     },
     "OutreachStrategy": {
       "properties": {
@@ -292,6 +567,53 @@
       "title": "PersonalizationHook",
       "type": "object"
     },
+    "RelatedPersonality": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "connection_type": {
+          "title": "Connection Type",
+          "type": "string"
+        },
+        "strength": {
+          "$ref": "#/$defs/ConnectionStrength",
+          "default": "possible"
+        },
+        "evidence": {
+          "title": "Evidence",
+          "type": "string"
+        },
+        "source_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "connection_type",
+        "evidence"
+      ],
+      "title": "RelatedPersonality",
+      "type": "object"
+    },
     "ResearchGaps": {
       "properties": {
         "missing_information": {
@@ -336,6 +658,55 @@
         }
       },
       "title": "ResearchGaps",
+      "type": "object"
+    },
+    "SameNameMatch": {
+      "description": "A different, publicly discoverable person sharing the name \u2014 kept\nstrictly separate from the target's own facts to prevent misattribution.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "identity_summary": {
+          "title": "Identity Summary",
+          "type": "string"
+        },
+        "distinguishing_info": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Distinguishing Info"
+        },
+        "source_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "why_confusable": {
+          "title": "Why Confusable",
+          "type": "string"
+        },
+        "why_different": {
+          "title": "Why Different",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "identity_summary",
+        "why_confusable",
+        "why_different"
+      ],
+      "title": "SameNameMatch",
       "type": "object"
     },
     "Source": {
@@ -442,12 +813,39 @@
       "title": "Prospect Name",
       "type": "string"
     },
+    "identity_verification": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/IdentityVerification"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "snapshot": {
       "default": [],
       "items": {
         "$ref": "#/$defs/Claim"
       },
       "title": "Snapshot",
+      "type": "array"
+    },
+    "detailed_summary": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Claim"
+      },
+      "title": "Detailed Summary",
+      "type": "array"
+    },
+    "education": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/EducationEntry"
+      },
+      "title": "Education",
       "type": "array"
     },
     "current_role": {
@@ -466,12 +864,28 @@
       "title": "Company Overview",
       "type": "array"
     },
+    "company_profiles": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/CompanyProfile"
+      },
+      "title": "Company Profiles",
+      "type": "array"
+    },
     "career_timeline": {
       "default": [],
       "items": {
         "$ref": "#/$defs/CareerEntry"
       },
       "title": "Career Timeline",
+      "type": "array"
+    },
+    "achievements": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Claim"
+      },
+      "title": "Achievements",
       "type": "array"
     },
     "expertise": {
@@ -520,6 +934,22 @@
         "$ref": "#/$defs/Claim"
       },
       "title": "Likely Priorities",
+      "type": "array"
+    },
+    "same_name_people": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SameNameMatch"
+      },
+      "title": "Same Name People",
+      "type": "array"
+    },
+    "related_personalities": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/RelatedPersonality"
+      },
+      "title": "Related Personalities",
       "type": "array"
     },
     "personalization_hooks": {

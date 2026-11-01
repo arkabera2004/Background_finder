@@ -38,14 +38,87 @@ class Claim(BaseModel):
     date: str | None = None
 
 
+class DatePrecision(str, Enum):
+    EXACT = "exact"
+    APPROXIMATE = "approximate"
+    UNKNOWN = "unknown"
+
+
 class CareerEntry(BaseModel):
     organization: str
     title: str
     start_date: str | None = None
     end_date: str | None = None
+    date_precision: DatePrecision = DatePrecision.UNKNOWN
     description: str | None = None
     source_ids: list[str] = []
     confidence: Confidence = Confidence.MEDIUM
+
+
+class IdentityVerification(BaseModel):
+    """What anchored identity resolution and how confident we are that every
+    other section describes this one person, not a namesake."""
+
+    profile_url: str | None = None
+    matched_identifiers: list[str] = []
+    confidence: Confidence = Confidence.MEDIUM
+    limitations: str | None = None
+
+
+class EducationEntry(BaseModel):
+    institution: str
+    degree: str | None = None
+    field: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+    date_precision: DatePrecision = DatePrecision.UNKNOWN
+    source_ids: list[str] = []
+    confidence: Confidence = Confidence.MEDIUM
+
+
+class CompanyProfile(BaseModel):
+    """Per-organization detail for the Company-by-Company Overview section —
+    one entry per company in the career timeline, not a generic description."""
+
+    name: str
+    website: str | None = None
+    what_they_do: str | None = None
+    industry: str | None = None
+    person_role: str | None = None
+    role_scope: str | None = None
+    related_projects: list[str] = []
+    start_date: str | None = None
+    end_date: str | None = None
+    date_precision: DatePrecision = DatePrecision.UNKNOWN
+    source_ids: list[str] = []
+    confidence: Confidence = Confidence.MEDIUM
+    uncertainty_note: str | None = None
+
+
+class SameNameMatch(BaseModel):
+    """A different, publicly discoverable person sharing the name — kept
+    strictly separate from the target's own facts to prevent misattribution."""
+
+    name: str
+    identity_summary: str
+    distinguishing_info: str | None = None
+    source_ids: list[str] = []
+    why_confusable: str
+    why_different: str
+
+
+class ConnectionStrength(str, Enum):
+    CONFIRMED = "confirmed"
+    POSSIBLE = "possible"
+
+
+class RelatedPersonality(BaseModel):
+    name: str
+    role: str | None = None
+    connection_type: str
+    strength: ConnectionStrength = ConnectionStrength.POSSIBLE
+    evidence: str
+    source_ids: list[str] = []
 
 
 class ActivityType(str, Enum):
@@ -97,16 +170,23 @@ class ResearchGaps(BaseModel):
 
 class ProspectBrief(BaseModel):
     prospect_name: str
+    identity_verification: IdentityVerification | None = None
     snapshot: list[Claim] = []
+    detailed_summary: list[Claim] = []
+    education: list[EducationEntry] = []
     current_role: list[Claim] = []
     company_overview: list[Claim] = []
+    company_profiles: list[CompanyProfile] = []
     career_timeline: list[CareerEntry] = []
+    achievements: list[Claim] = []
     expertise: list[Claim] = []
     activity: list[ActivityItem] = []
     recurring_themes: list[Claim] = []
     company_context: list[Claim] = []
     communication_style: list[Claim] = []
     likely_priorities: list[Claim] = []
+    same_name_people: list[SameNameMatch] = []
+    related_personalities: list[RelatedPersonality] = []
     personalization_hooks: list[PersonalizationHook] = []
     outreach_strategy: OutreachStrategy
     sources: list[Source] = []
