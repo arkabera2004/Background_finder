@@ -95,7 +95,7 @@ def test_markdown_export_contains_all_sections():
 
 def test_markdown_export_renders_career_timeline():
     md = to_markdown(SAMPLE_BRIEF)
-    assert "## Career Timeline" in md
+    assert "## Complete Career Timeline" in md
     assert "Senior Engineer" in md
     assert "Acme" in md
     assert "2020-01" in md
@@ -104,7 +104,7 @@ def test_markdown_export_renders_career_timeline():
 
 def test_markdown_export_renders_activity_with_type_date_and_url():
     md = to_markdown(SAMPLE_BRIEF)
-    assert "## Activity" in md
+    assert "## Posts, Reposts & Public Activity" in md
     assert "interview or podcast" in md
     assert "AI infrastructure" in md
     assert "2026-02-01" in md
@@ -113,7 +113,7 @@ def test_markdown_export_renders_activity_with_type_date_and_url():
 
 def test_markdown_export_renders_personalization_hooks_with_evidence_and_angle():
     md = to_markdown(SAMPLE_BRIEF)
-    assert "## Personalisation Hooks" in md
+    assert "## Common Ground & Conversation Opportunities" in md
     assert "Evidence: Mentioned in a conference talk" in md
     assert "Relevance: Shows thought leadership" in md
     assert "Outreach angle: Ask about the talk" in md
@@ -121,7 +121,7 @@ def test_markdown_export_renders_personalization_hooks_with_evidence_and_angle()
 
 def test_markdown_export_renders_outreach_strategy():
     md = to_markdown(SAMPLE_BRIEF)
-    assert "## Outreach Strategy" in md
+    assert "## Personalized Outreach Brief" in md
     assert "Lead with the podcast appearance" in md
     assert "How are you scaling AI infra?" in md
     assert "Reference the podcast" in md
@@ -158,7 +158,7 @@ def test_pdf_export_includes_career_timeline_activity_and_outreach_strategy():
         text = "\n".join(page.extract_text() or "" for page in pdf.pages)
     assert "Career Timeline" in text
     assert "Activity" in text
-    assert "Outreach Strategy" in text
+    assert "Personalized Outreach Brief" in text
     assert "Research Gaps" in text
 
 
@@ -166,3 +166,103 @@ def test_markdown_export_omits_empty_sections():
     md = to_markdown(SAMPLE_BRIEF)
     assert "## Current Role" not in md
     assert "## Expertise" not in md
+
+
+DEEP_RESEARCH_BRIEF = {
+    **SAMPLE_BRIEF,
+    "identity_verification": {
+        "profile_url": "https://linkedin.com/in/jane-doe",
+        "matched_identifiers": ["Name: Jane Doe", "Current employer: Acme"],
+        "confidence": "high",
+        "limitations": "Anchored to a direct LinkedIn URL.",
+    },
+    "detailed_summary": [
+        {"text": "Jane Doe has worked in robotics since 2020.", "is_inference": False, "source_ids": ["profile"]}
+    ],
+    "education": [
+        {
+            "institution": "State University",
+            "degree": "B.S.",
+            "field": "Computer Science",
+            "start_date": "2012",
+            "end_date": "2016",
+            "date_precision": "approximate",
+            "source_ids": ["profile"],
+        }
+    ],
+    "company_profiles": [
+        {
+            "name": "Acme",
+            "website": "https://acme.example",
+            "what_they_do": "Builds robots",
+            "person_role": "Senior Engineer",
+            "start_date": "2020-01",
+            "end_date": None,
+            "date_precision": "exact",
+            "source_ids": ["profile"],
+            "uncertainty_note": None,
+        }
+    ],
+    "achievements": [
+        {"text": "Promoted to Senior Engineer in 2022", "is_inference": False, "source_ids": ["profile"]}
+    ],
+    "same_name_people": [
+        {
+            "name": "Jane Doe",
+            "identity_summary": "CEO of a different company",
+            "distinguishing_info": "Works in retail, not robotics",
+            "source_ids": ["s0"],
+            "why_confusable": "Shares the same full name",
+            "why_different": "Does not mention Acme",
+        }
+    ],
+    "related_personalities": [
+        {
+            "name": "John Smith",
+            "role": "Co-founder",
+            "connection_type": "colleague",
+            "strength": "possible",
+            "evidence": "Mentioned together in a conference recap",
+            "source_ids": ["s0"],
+        }
+    ],
+}
+
+
+def test_markdown_export_renders_deep_research_sections_in_order():
+    md = to_markdown(DEEP_RESEARCH_BRIEF)
+    for heading in [
+        "## Identity Verification",
+        "## Executive Overview",
+        "## Detailed Person Summary",
+        "## Education & Early Background",
+        "## Complete Career Timeline",
+        "## Company-by-Company Overview",
+        "## Achievements & Milestones",
+        "## Posts, Reposts & Public Activity",
+        "## Publications, Talks & Interviews",
+        "## People with the Same Name",
+        "## Related Personalities",
+    ]:
+        assert heading in md, heading
+
+    order = [md.index(h) for h in ["## Identity Verification", "## Executive Overview", "## Education & Early Background", "## Complete Career Timeline"]]
+    assert order == sorted(order)
+
+    assert "https://linkedin.com/in/jane-doe" in md
+    assert "State University" in md
+    assert "acme.example" in md
+    assert "CEO of a different company" in md
+    assert "John Smith" in md
+
+
+def test_pdf_export_renders_deep_research_sections():
+    pdf_bytes = to_pdf(DEEP_RESEARCH_BRIEF)
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+    assert "Identity Verification" in text
+    assert "Education & Early Background" in text
+    assert "Company-by-Company Overview" in text
+    assert "Achievements & Milestones" in text
+    assert "People with the Same Name" in text
+    assert "Related Personalities" in text
