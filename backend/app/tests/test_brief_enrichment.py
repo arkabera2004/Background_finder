@@ -1,9 +1,10 @@
-from app.schemas.brief import CareerEntry, Confidence, OutreachStrategy, ProspectBrief, Source
+from app.schemas.brief import Claim, CareerEntry, Confidence, OutreachStrategy, ProspectBrief, Source
 from app.services.brief_enrichment import (
     build_company_profiles,
     build_detailed_summary,
     build_education_entries,
     build_identity_verification,
+    build_recency_warning,
     build_same_name_people,
     enrich_brief,
     extract_education_from_sources,
@@ -170,11 +171,74 @@ def test_extract_related_personalities_is_always_possible_strength():
             "source_ids": ["s1"],
         }
     ]
-    results = extract_related_personalities("Jane Doe", activity, [])
+    results = extract_related_personalities(_brief(), activity, [])
     assert all(r.strength == "possible" for r in results)
     names = [r.name for r in results]
     assert "John Smith" in names
     assert "Jane Doe" not in names
+
+
+def test_extract_related_personalities_filters_non_person_phrases():
+    """Regression (F9): a publisher name or industry term that matches the
+    "Capitalized Word(s)" pattern must not be treated as a related person."""
+    activity = [
+        {
+            "summary": "Jane Doe spoke to Entrepreneur Middle East about Global Capability Centers.",
+            "source_ids": ["s1"],
+        }
+    ]
+    results = extract_related_personalities(_brief(), activity, [])
+    names = [r.name for r in results]
+    assert "Entrepreneur Middle East" not in names
+    assert "Global Capability Centers" not in names
+
+
+def test_extract_related_personalities_ignores_non_subject_sources():
+    """Regression (F9): a name mentioned only in a company-context source
+    not backing any subject-attributed claim must not seed a guess."""
+    brief = _brief(
+        career_timeline=[CareerEntry(organization="Acme", title="PM", source_ids=["s1"])],
+    )
+    unrelated_source = Source(
+        id="s2",
+        url="https://example.com/unrelated",
+        excerpt="Priya Mohan was hired as COO at a different company entirely.",
+    )
+    results = extract_related_personalities(brief, [], [unrelated_source])
+    assert results == []
+
+
+def test_recency_warning_fires_when_newest_source_is_stale():
+    brief = _brief(
+        current_role=[Claim(text="CTO at JoulestoWatts", source_ids=["s1"])],
+        sources=[Source(id="s1", url="https://example.com", published_at="2024-01-15")],
+    )
+    warning = build_recency_warning(brief)
+    assert warning is not None
+    assert "2024-01-15" in warning
+
+
+def test_recency_warning_absent_when_recent_source_exists():
+    from datetime import datetime, timedelta, timezone
+
+    recent = (datetime.now(timezone.utc) - timedelta(days=5)).date().isoformat()
+    brief = _brief(
+        current_role=[Claim(text="CEO at Wayam AI", source_ids=["s1"])],
+        sources=[Source(id="s1", url="https://example.com", published_at=recent)],
+    )
+    assert build_recency_warning(brief) is None
+
+
+def test_recency_warning_fires_with_no_dated_evidence_at_all():
+    brief = _brief(current_role=[Claim(text="CTO at JoulestoWatts", source_ids=["s1"])])
+    warning = build_recency_warning(brief)
+    assert warning is not None
+    assert "could not be confirmed" in warning
+
+
+def test_recency_warning_absent_with_no_current_role_claims():
+    brief = _brief()
+    assert build_recency_warning(brief) is None
 
 
 def test_enrich_brief_populates_all_new_sections():

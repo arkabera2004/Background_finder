@@ -9,6 +9,7 @@ expected to often be empty.
 """
 
 import re
+from datetime import datetime, timezone
 
 from app.schemas.brief import (
     Claim,
@@ -63,6 +64,19 @@ _STOPWORD_STARTS = {
     "They",
 }
 MAX_RELATED_PERSONALITIES = 5
+
+# F9: publishers, industry terms, and generic phrases that match the
+# "Capitalized Word(s)" name pattern but are not people — co-occurring in
+# an article with the subject's name is not evidence they're connected.
+_NON_PERSON_WORDS = {
+    "middle", "east", "west", "north", "south", "global", "capability",
+    "centers", "centre", "centres", "entrepreneur", "business", "solutions",
+    "group", "industries", "technologies", "technology", "digital", "pulse",
+    "junction", "summit", "week", "news", "magazine", "media", "times",
+    "today", "world", "india", "asia", "america", "europe", "network",
+    "corporation", "company", "inc", "ltd", "limited", "holdings",
+    "innovation", "innovations", "cloud", "ai", "data", "science", "tech",
+}
 
 
 def build_identity_verification(
@@ -274,15 +288,38 @@ def build_same_name_people(
     return matches, new_sources
 
 
+def _looks_like_a_person(candidate: str) -> bool:
+    words = [w.lower() for w in candidate.split()]
+    return not any(w in _NON_PERSON_WORDS for w in words)
+
+
+def _subject_bucket_source_ids(brief: ProspectBrief) -> set[str]:
+    """Sources that actually back something attributed to the subject
+    (activity, career, snapshot, current role, detailed summary, company
+    profiles) — not company-context pages or namesake sources, which must
+    not seed "related personality" guesses (F9)."""
+    ids: set[str] = set()
+    for item in brief.activity:
+        ids.update(item.source_ids)
+    for entry in brief.career_timeline:
+        ids.update(entry.source_ids)
+    for claim in (*brief.snapshot, *brief.current_role, *brief.detailed_summary):
+        ids.update(claim.source_ids)
+    for profile in brief.company_profiles:
+        ids.update(profile.source_ids)
+    return ids
+
+
 def extract_related_personalities(
-    person_name: str, activity: list[dict], sources: list[Source]
+    brief: ProspectBrief, activity: list[dict], sources: list[Source]
 ) -> list[RelatedPersonality]:
-    """Heuristic only: scans activity summaries and source excerpts for
-    capitalized name-like phrases co-occurring with the subject's own
-    content. No relationship graph is available, so every result is
-    labeled "possible" — never "confirmed" — and must be read as a lead
-    for human review, not a verified connection."""
-    own_name = person_name.strip().lower()
+    """Heuristic only: scans activity summaries and Subject-bucket source
+    excerpts for capitalized name-like phrases co-occurring with the
+    subject's own content. No relationship graph is available, so every
+    result is labeled "possible" — never "confirmed" — and must be read as
+    a lead for human review, not a verified connection."""
+    own_name = brief.prospect_name.strip().lower()
+    subject_source_ids = _subject_bucket_source_ids(brief)
     counts: dict[str, dict] = {}
 
     def scan(text: str | None, source_id: str | None):
@@ -291,6 +328,8 @@ def extract_related_personalities(
         for match in _NAME_PATTERN.finditer(text):
             candidate = match.group(1).strip()
             if candidate.lower() == own_name or candidate.split()[0] in _STOPWORD_STARTS:
+                continue
+            if not _looks_like_a_person(candidate):
                 continue
             entry = counts.setdefault(
                 candidate, {"count": 0, "evidence": text[:200], "source_ids": set()}
@@ -302,6 +341,8 @@ def extract_related_personalities(
     for item in activity:
         scan(item.get("summary"), (item.get("source_ids") or [None])[0])
     for s in sources:
+        if s.id not in subject_source_ids:
+            continue
         scan(s.excerpt, s.id)
 
     ranked = sorted(counts.items(), key=lambda kv: kv[1]["count"], reverse=True)
@@ -319,6 +360,51 @@ def extract_related_personalities(
             )
         )
     return results
+
+
+RECENCY_WARNING_THRESHOLD_DAYS = 90
+_DATE_RE = re.compile(r"(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?")
+
+
+def _parse_date(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    match = _DATE_RE.match(value.strip())
+    if not match:
+        return None
+    year, month, day = match.groups()
+    try:
+        return datetime(int(year), int(month or 1), int(day or 1), tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def build_recency_warning(brief: ProspectBrief) -> str | None:
+    """F6: a brief must not silently present a role from a stale snapshot as
+    current. Finds the most recent dated evidence across sources and
+    activity; if nothing is within the recency window (or there's no dated
+    evidence at all), returns a warning to attach as a research gap rather
+    than let the current-role claim imply it's up to date."""
+    if not brief.current_role and not brief.snapshot:
+        return None
+
+    dates = [d for d in (_parse_date(s.published_at) for s in brief.sources) if d]
+    dates += [d for d in (_parse_date(a.published_at) for a in brief.activity) if d]
+    if not dates:
+        return (
+            "Current role could not be confirmed against any dated source — the "
+            "role shown may be out of date. Verify current employment before outreach."
+        )
+
+    newest = max(dates)
+    age_days = (datetime.now(timezone.utc) - newest).days
+    if age_days > RECENCY_WARNING_THRESHOLD_DAYS:
+        return (
+            f"The most recent dated evidence found is from {newest.date().isoformat()} "
+            f"({age_days} days old) — the current role shown may be out of date. "
+            "Verify current employment before outreach."
+        )
+    return None
 
 
 def enrich_brief(
@@ -339,8 +425,19 @@ def enrich_brief(
     same_name_people, sources_with_namesakes = build_same_name_people(
         same_name_candidates, brief.sources
     )
+    # Build the near-final brief first (minus related_personalities) since
+    # the extractor needs the already-computed career/activity/company
+    # fields to know which sources are in the Subject bucket.
+    brief_for_extraction = brief.model_copy(
+        update={
+            "education": education,
+            "company_profiles": company_profiles,
+            "detailed_summary": detailed_summary,
+            "sources": sources_with_namesakes,
+        }
+    )
     related_personalities = extract_related_personalities(
-        brief.prospect_name, activity, sources_with_namesakes
+        brief_for_extraction, activity, sources_with_namesakes
     )
 
     enriched = brief.model_copy(
@@ -354,4 +451,20 @@ def enrich_brief(
             "sources": sources_with_namesakes,
         }
     )
+
+    recency_warning = build_recency_warning(enriched)
+    if recency_warning and recency_warning not in enriched.research_gaps.limited_coverage_areas:
+        enriched = enriched.model_copy(
+            update={
+                "research_gaps": enriched.research_gaps.model_copy(
+                    update={
+                        "limited_coverage_areas": [
+                            *enriched.research_gaps.limited_coverage_areas,
+                            recency_warning,
+                        ]
+                    }
+                )
+            }
+        )
+
     return validate_brief(enriched)
