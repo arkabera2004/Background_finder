@@ -221,6 +221,20 @@ class WebFootprintStage(Stage):
         person = ctx.outputs.get("_person")
         name = getattr(person, "full_name", None) or ""
 
+        # A common name can surface unrelated people in a search engine; a
+        # pure name match alone isn't enough evidence to attribute a result
+        # to this specific person. Require corroboration against something
+        # we already know about them (their company, or a past employer)
+        # unless the byline itself names them.
+        known_orgs: set[str] = set()
+        current_company = getattr(person, "current_company", None)
+        if current_company:
+            known_orgs.add(current_company.lower())
+        for exp in getattr(person, "experiences", []) or []:
+            org = getattr(exp, "organization", None)
+            if org:
+                known_orgs.add(org.lower())
+
         queries = [
             f'"{name}" interview OR podcast',
             f'"{name}" article OR publication',
@@ -239,6 +253,7 @@ class WebFootprintStage(Stage):
 
         sources: list[dict] = []
         activity: list[dict] = []
+        unconfirmed_count = 0
         for r in merged:
             text = f"{r.title or ''} {r.snippet or ''}"
             activity_type = classify_activity(text)
@@ -249,6 +264,15 @@ class WebFootprintStage(Stage):
             ) and is_byline_match(name, text):
                 authored_by_person = True
 
+            corroborated = authored_by_person or any(
+                org in text.lower() for org in known_orgs
+            )
+            if not corroborated and known_orgs:
+                # We know who this person's employer(s) are and this result
+                # doesn't mention any of them — likely a namesake, not them.
+                unconfirmed_count += 1
+                continue
+
             sources.append({"url": r.url, "title": r.title, "excerpt": r.snippet})
             activity.append(
                 {
@@ -258,15 +282,25 @@ class WebFootprintStage(Stage):
                     "url": r.url,
                     "published_at": None,
                     "authored_by_person": authored_by_person,
-                    "relevance": None,
+                    "relevance": None
+                    if (authored_by_person or known_orgs)
+                    else "Matched on name only — not confirmed to be the same person.",
                     "confidence": "medium" if authored_by_person else "low",
                     "source_ids": [],
                 }
             )
 
+        gaps: list[str] = []
+        if unconfirmed_count:
+            gaps.append(
+                f"Found {unconfirmed_count} public mention(s) of people named \"{name}\" "
+                "that could not be confirmed as this person (no match against known "
+                "employer) and were excluded to avoid misattribution."
+            )
+
         return StageResult(
             stage=self.name,
-            output={"footprint_items": len(merged), "activity": activity},
+            output={"footprint_items": len(merged), "activity": activity, "gaps": gaps},
             sources=sources,
         )
 
@@ -340,6 +374,7 @@ class SynthesiseBriefStage(Stage):
             activity.append(item)
 
         company_gaps = list(ctx.outputs.get(StageName.RESEARCH_COMPANY.value, {}).get("gaps", []))
+        company_gaps.extend(ctx.outputs.get(StageName.WEB_FOOTPRINT.value, {}).get("gaps", []))
         for failed_stage, error in ctx.stage_failures.items():
             company_gaps.append(f"{failed_stage.value.replace('_', ' ')} failed: {error}")
 

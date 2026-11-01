@@ -476,3 +476,38 @@ async def test_web_footprint_stage_issues_three_queries_and_dedupes_by_url():
     # Deduplicated by URL across the three queries (3 unique urls, not 4).
     assert result.output["footprint_items"] == 3
     assert len({s["url"] for s in result.sources}) == 3
+
+
+@pytest.mark.asyncio
+async def test_web_footprint_excludes_likely_namesakes_when_employer_is_known():
+    """A common name can match an unrelated person's content; results that
+    don't corroborate against a known employer must be excluded rather than
+    misattributed to this person."""
+    from app.providers.search_provider import SearchResult
+
+    search = _FakeSearchProvider(
+        [
+            SearchResult(
+                url="https://example.com/real",
+                title="Jordan Avery on scaling robotics at Acme Robotics",
+                snippet="Acme Robotics PM discusses product strategy",
+            ),
+            SearchResult(
+                url="https://example.com/namesake",
+                title="Jordan Avery named Local Excellence Honoree",
+                snippet="CEO of Mass Green Retail recognized for community work",
+            ),
+        ]
+    )
+    stage = WebFootprintStage(search)
+    ctx = StageContext(run_id="r6", depth="standard")
+    ctx.outputs["_person"] = Person(
+        full_name="Jordan Avery", current_company="Acme Robotics", source="manual"
+    )
+
+    result = await stage.run(ctx)
+
+    urls = {item["url"] for item in result.output["activity"]}
+    assert urls == {"https://example.com/real"}
+    assert result.output["gaps"]
+    assert "Jordan Avery" in result.output["gaps"][0]
