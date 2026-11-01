@@ -18,6 +18,12 @@ from app.services.ai_brief_synthesizer import rule_based_synthesis, synthesize_w
 from app.services.brief_enrichment import enrich_brief
 from app.services.career_analysis import analyse_career, build_career_timeline
 from app.services.company_discovery import discover_company_domain
+from app.services.identity_attribution import (
+    build_fingerprint,
+    canonical_url,
+    normalized_title,
+    score_item,
+)
 from app.stages.base import Stage, StageContext, StageName, StageResult
 
 logger = logging.getLogger(__name__)
@@ -215,26 +221,28 @@ class AnalyseActivityStage(Stage):
 class WebFootprintStage(Stage):
     name = StageName.WEB_FOOTPRINT
 
-    def __init__(self, search: SearchProvider):
+    def __init__(self, search: SearchProvider, known_other_employers: set[str] | None = None):
         self.search = search
+        # Seeded by regression fixtures / future callers who already know of
+        # a confirmed different person sharing this name and their employer
+        # (e.g. from a prior disambiguation step). Empty by default — the
+        # live pipeline has no such source yet for single-URL intake, so
+        # items with no corroboration land in "unverified", not "namesake".
+        self.known_other_employers = known_other_employers or set()
 
     async def run(self, ctx: StageContext) -> StageResult:
         person = ctx.outputs.get("_person")
         name = getattr(person, "full_name", None) or ""
 
-        # A common name can surface unrelated people in a search engine; a
-        # pure name match alone isn't enough evidence to attribute a result
-        # to this specific person. Require corroboration against something
-        # we already know about them (their company, or a past employer)
-        # unless the byline itself names them.
-        known_orgs: dict[str, str] = {}  # lowercase -> original casing, for display
-        current_company = getattr(person, "current_company", None)
-        if current_company:
-            known_orgs[current_company.lower()] = current_company
-        for exp in getattr(person, "experiences", []) or []:
-            company = getattr(exp, "company", None)
-            if company:
-                known_orgs[company.lower()] = company
+        fp = build_fingerprint(
+            full_name=name,
+            linkedin_url=getattr(person, "linkedin_url", None) if person else None,
+            current_company=getattr(person, "current_company", None) if person else None,
+            headline=getattr(person, "headline", None) if person else None,
+            experiences=getattr(person, "experiences", []) if person else [],
+            education=getattr(person, "education", []) if person else [],
+        )
+        fp.known_other_employers = self.known_other_employers
 
         queries = [
             f'"{name}" interview OR podcast',
@@ -242,24 +250,40 @@ class WebFootprintStage(Stage):
             f'"{name}" talk OR conference OR webinar',
         ]
 
-        seen_urls: set[str] = set()
+        seen_canonical: set[str] = set()
         merged: list[SearchResult] = []
         for query in queries:
             results = await self.search.search(query, max_results=10)
             for r in results:
-                if r.url in seen_urls:
+                key = canonical_url(r.url)
+                if key in seen_canonical:
                     continue
-                seen_urls.add(r.url)
+                seen_canonical.add(key)
                 merged.append(r)
 
         sources: list[dict] = []
         activity: list[dict] = []
-        # Namesake hits that failed corroboration are not discarded outright
-        # — they're exactly the evidence the "People with the Same Name"
-        # section needs, kept separate from the target's own facts.
+        # Namesake hits are not discarded outright — they're exactly the
+        # evidence the "People with the Same Name" section needs, kept
+        # separate from the target's own facts. Unverified hits (mentions
+        # the name, no corroboration, no conflict) are excluded from the
+        # brief entirely — absence of evidence isn't evidence either way.
         same_name_candidates: list[dict] = []
+        unverified_count = 0
+        seen_titles: set[str] = set()
         for r in merged:
             text = f"{r.title or ''} {r.snippet or ''}"
+            title_key = normalized_title(r.title)
+            if title_key and title_key in seen_titles:
+                continue
+
+            verdict, _hits = score_item(text, fp)
+            if verdict == "drop":
+                continue
+            if verdict == "unverified":
+                unverified_count += 1
+                continue
+
             activity_type = classify_activity(text)
             authored_by_person = False
             if activity_type in (
@@ -268,12 +292,7 @@ class WebFootprintStage(Stage):
             ) and is_byline_match(name, text):
                 authored_by_person = True
 
-            corroborated = authored_by_person or any(
-                org in text.lower() for org in known_orgs
-            )
-            if not corroborated and known_orgs:
-                # We know who this person's employer(s) are and this result
-                # doesn't mention any of them — likely a namesake, not them.
+            if verdict == "namesake":
                 same_name_candidates.append(
                     {
                         "name": name,
@@ -281,12 +300,17 @@ class WebFootprintStage(Stage):
                         "distinguishing_info": r.snippet,
                         "url": r.url,
                         "why_confusable": f'Shares the full name "{name}" and surfaced in a public search for it.',
-                        "why_different": "Does not mention any of this person's known employers "
-                        f"({', '.join(sorted(known_orgs.values()))}), so is presumed to be a different person.",
+                        "why_different": "Mentions an employer already confirmed to belong to a "
+                        f"different person named {name}, not to this person.",
                     }
                 )
+                if title_key:
+                    seen_titles.add(title_key)
                 continue
 
+            # verdict == "subject"
+            if title_key:
+                seen_titles.add(title_key)
             sources.append({"url": r.url, "title": r.title, "excerpt": r.snippet})
             activity.append(
                 {
@@ -296,9 +320,7 @@ class WebFootprintStage(Stage):
                     "url": r.url,
                     "published_at": None,
                     "authored_by_person": authored_by_person,
-                    "relevance": None
-                    if (authored_by_person or known_orgs)
-                    else "Matched on name only — not confirmed to be the same person.",
+                    "relevance": None,
                     "confidence": "medium" if authored_by_person else "low",
                     "source_ids": [],
                 }
@@ -307,10 +329,15 @@ class WebFootprintStage(Stage):
         gaps: list[str] = []
         if same_name_candidates:
             gaps.append(
-                f"Found {len(same_name_candidates)} public mention(s) of people named \"{name}\" "
-                "that could not be confirmed as this person (no match against known "
-                "employer); listed separately under People with the Same Name rather than "
-                "attributed to this person's activity."
+                f"Found {len(same_name_candidates)} public mention(s) of a different person named "
+                f'"{name}" (conflicting employer); listed separately under People with the Same '
+                "Name rather than attributed to this person's activity."
+            )
+        if unverified_count:
+            gaps.append(
+                f"Found {unverified_count} public mention(s) of \"{name}\" that could not be "
+                "confirmed as this person or as a different one (no corroborating or conflicting "
+                "detail); excluded from the brief rather than guessed into either bucket."
             )
 
         return StageResult(

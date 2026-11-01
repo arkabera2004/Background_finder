@@ -456,7 +456,9 @@ async def test_web_footprint_stage_issues_three_queries_and_dedupes_by_url():
             ),
         ],
         "talk OR conference OR webinar": [
-            SearchResult(url="https://unique.example/c", title="conference talk", snippet="webinar")
+            SearchResult(
+                url="https://unique.example/c", title="Jane Doe conference talk", snippet="webinar"
+            )
         ],
     }
     search = _QueryTrackingSearchProvider(results_by_query_substring)
@@ -479,10 +481,11 @@ async def test_web_footprint_stage_issues_three_queries_and_dedupes_by_url():
 
 
 @pytest.mark.asyncio
-async def test_web_footprint_excludes_likely_namesakes_when_employer_is_known():
-    """A common name can match an unrelated person's content; results that
-    don't corroborate against a known employer must be excluded rather than
-    misattributed to this person."""
+async def test_web_footprint_excludes_uncorroborated_items_as_unverified_not_namesake():
+    """Regression for the audit finding that zero corroboration was wrongly
+    treated as proof of a different person. An item with no fingerprint hit
+    and no known conflicting employer must be excluded as "unverified",
+    not confidently mislabeled as a namesake without real conflict evidence."""
     from app.providers.search_provider import SearchResult
 
     search = _FakeSearchProvider(
@@ -509,13 +512,38 @@ async def test_web_footprint_excludes_likely_namesakes_when_employer_is_known():
 
     urls = {item["url"] for item in result.output["activity"]}
     assert urls == {"https://example.com/real"}
-    assert result.output["gaps"]
-    assert "Jordan Avery" in result.output["gaps"][0]
+    assert any("could not be confirmed" in g for g in result.output["gaps"])
+    assert result.output["same_name_candidates"] == []
 
+
+@pytest.mark.asyncio
+async def test_web_footprint_classifies_as_namesake_when_employer_conflict_is_known():
+    """When a conflicting employer for a different, same-named person IS
+    already known (e.g. seeded from an earlier disambiguation step), that
+    item is correctly bucketed as a namesake rather than merely excluded."""
+    from app.providers.search_provider import SearchResult
+
+    search = _FakeSearchProvider(
+        [
+            SearchResult(
+                url="https://example.com/namesake",
+                title="Jordan Avery, VP at Northwind Industries, leads expansion",
+                snippet="Northwind Industries names Jordan Avery as VP",
+            ),
+        ]
+    )
+    stage = WebFootprintStage(search, known_other_employers={"Northwind Industries"})
+    ctx = StageContext(run_id="r6b", depth="standard")
+    ctx.outputs["_person"] = Person(
+        full_name="Jordan Avery", current_company="Acme Robotics", source="manual"
+    )
+
+    result = await stage.run(ctx)
+
+    assert result.output["activity"] == []
     candidates = result.output["same_name_candidates"]
     assert len(candidates) == 1
     assert candidates[0]["url"] == "https://example.com/namesake"
-    assert "Acme Robotics" in candidates[0]["why_different"]
 
 
 @pytest.mark.asyncio

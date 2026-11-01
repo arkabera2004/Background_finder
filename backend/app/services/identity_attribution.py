@@ -147,12 +147,18 @@ def score_item(text: str, fp: IdentityFingerprint) -> tuple[str, int]:
         for other in fp.known_other_employers
     )
 
-    hits = len(fp.fingerprint_tokens() & item_tokens)
+    fp_tokens = fp.fingerprint_tokens()
+    hits = len(fp_tokens & item_tokens)
 
     if has_conflict and hits == 0:
         return "namesake", -1
     if hits >= 1:
         return "subject", hits
+    if not fp_tokens:
+        # Nothing is known about this person beyond their name (e.g. a bare
+        # pasted-text submission with no employer/education data) — a name
+        # match is the best signal available, same as before this fix.
+        return "subject", 0
     return "unverified", 0
 
 
