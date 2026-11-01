@@ -340,6 +340,8 @@ class SynthesiseBriefStage(Stage):
             activity.append(item)
 
         company_gaps = list(ctx.outputs.get(StageName.RESEARCH_COMPANY.value, {}).get("gaps", []))
+        for failed_stage, error in ctx.stage_failures.items():
+            company_gaps.append(f"{failed_stage.value.replace('_', ' ')} failed: {error}")
 
         brief = None
         metadata = None

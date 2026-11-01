@@ -132,6 +132,9 @@ async def execute_run(run: Run) -> None:
         run.steps[exc.stage.value].error = str(exc.cause)
         return
 
+    for failed_stage, error in ctx.stage_failures.items():
+        run.steps[failed_stage.value].error = str(error)
+
     run.brief = results[StageName.SYNTHESISE_BRIEF].output
     run.status = "completed"
     run.completed_at = datetime.now(timezone.utc)

@@ -21,6 +21,10 @@ class StageContext:
     run_id: str
     depth: str
     outputs: dict[str, Any] = field(default_factory=dict)
+    # Populated with the exception from a non-critical parallel stage that
+    # failed, keyed by StageName, so synthesis can report it as a research
+    # gap instead of the failure silently vanishing.
+    stage_failures: dict["StageName", Exception] = field(default_factory=dict)
 
 
 @dataclass

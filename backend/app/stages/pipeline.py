@@ -69,11 +69,18 @@ class Pipeline:
             ctx, StageName.FETCH_PROFILE, on_event
         )
 
+        # A failure in any one of these (e.g. company research can't reach a
+        # provider) must not destroy data already gathered by the others, so
+        # exceptions are collected rather than propagated.
         parallel_names = [n for n in PARALLEL_AFTER_FETCH if n in self.stages]
         parallel_results = await asyncio.gather(
-            *(self._run_stage(ctx, name, on_event) for name in parallel_names)
+            *(self._run_stage(ctx, name, on_event) for name in parallel_names),
+            return_exceptions=True,
         )
         for name, result in zip(parallel_names, parallel_results):
+            if isinstance(result, BaseException):
+                ctx.stage_failures[name] = result
+                continue
             results[name] = result
 
         results[StageName.SYNTHESISE_BRIEF] = await self._run_stage(

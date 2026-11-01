@@ -126,6 +126,30 @@ def test_create_research_surfaces_identity_search_failure_as_502(monkeypatch):
     assert "search provider" in resp.json()["detail"].lower()
 
 
+def test_one_failed_parallel_stage_does_not_abort_the_whole_run(monkeypatch):
+    from app.stages.impl import ResearchCompanyStage
+
+    async def _boom(self, ctx):
+        raise RuntimeError("company crawler unreachable")
+
+    monkeypatch.setattr(ResearchCompanyStage, "run", _boom)
+
+    headers = _auth_header("partial-failure-user")
+    resp = client.post(
+        "/research",
+        json={"full_name": "Jane Doe", "pasted_text": "Jane Doe\nSenior Engineer at Acme " * 3},
+        headers=headers,
+    )
+    run_id = resp.json()["run_id"]
+
+    final = _wait_for_completion(run_id, headers)
+    assert final["status"] == "completed"
+    assert final["brief"] is not None
+    assert final["steps"]["research_company"]["status"] == "failed"
+    assert "unreachable" in final["steps"]["research_company"]["error"]
+    assert final["steps"]["analyse_career"]["status"] == "completed"
+
+
 def test_create_research_fails_for_url_only_without_provider():
     headers = _auth_header()
     resp = client.post(
