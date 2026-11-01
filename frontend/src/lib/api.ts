@@ -110,14 +110,69 @@ export interface BriefClaim {
   date: string | null;
 }
 
+export type DatePrecision = "exact" | "approximate" | "unknown";
+
 export interface CareerEntry {
   organization: string;
   title: string;
   start_date: string | null;
   end_date: string | null;
+  date_precision: DatePrecision;
   description: string | null;
   source_ids: string[];
   confidence: Confidence;
+}
+
+export interface IdentityVerification {
+  profile_url: string | null;
+  matched_identifiers: string[];
+  confidence: Confidence;
+  limitations: string | null;
+}
+
+export interface EducationEntry {
+  institution: string;
+  degree: string | null;
+  field: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  date_precision: DatePrecision;
+  source_ids: string[];
+  confidence: Confidence;
+}
+
+export interface CompanyProfile {
+  name: string;
+  website: string | null;
+  what_they_do: string | null;
+  industry: string | null;
+  person_role: string | null;
+  role_scope: string | null;
+  related_projects: string[];
+  start_date: string | null;
+  end_date: string | null;
+  date_precision: DatePrecision;
+  source_ids: string[];
+  confidence: Confidence;
+  uncertainty_note: string | null;
+}
+
+export interface SameNameMatch {
+  name: string;
+  identity_summary: string;
+  distinguishing_info: string | null;
+  source_ids: string[];
+  why_confusable: string;
+  why_different: string;
+}
+
+export interface RelatedPersonality {
+  name: string;
+  role: string | null;
+  connection_type: string;
+  strength: "confirmed" | "possible";
+  evidence: string;
+  source_ids: string[];
 }
 
 export type ActivityType =
@@ -177,16 +232,23 @@ export interface SynthesisMetadata {
 
 export interface ProspectBrief {
   prospect_name: string;
+  identity_verification: IdentityVerification | null;
   snapshot: BriefClaim[];
+  detailed_summary: BriefClaim[];
+  education: EducationEntry[];
   current_role: BriefClaim[];
   company_overview: BriefClaim[];
+  company_profiles: CompanyProfile[];
   career_timeline: CareerEntry[];
+  achievements: BriefClaim[];
   expertise: BriefClaim[];
   activity: ActivityItem[];
   recurring_themes: BriefClaim[];
   company_context: BriefClaim[];
   communication_style: BriefClaim[];
   likely_priorities: BriefClaim[];
+  same_name_people: SameNameMatch[];
+  related_personalities: RelatedPersonality[];
   personalization_hooks: PersonalizationHook[];
   outreach_strategy: OutreachStrategy;
   sources: BriefSource[];

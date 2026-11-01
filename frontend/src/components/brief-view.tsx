@@ -8,23 +8,18 @@ import type {
   BriefClaim,
   BriefSource,
   CareerEntry,
+  CompanyProfile,
+  EducationEntry,
   PersonalizationHook,
   ProspectBrief,
+  RelatedPersonality,
+  SameNameMatch,
 } from "@/lib/api";
 
-const CLAIM_SECTIONS: { key: keyof ProspectBrief; label: string }[] = [
-  { key: "snapshot", label: "Executive Snapshot" },
-  { key: "current_role", label: "Current Role" },
-  { key: "company_overview", label: "Company Overview" },
-];
-
-const CLAIM_SECTIONS_2: { key: keyof ProspectBrief; label: string }[] = [
-  { key: "expertise", label: "Expertise" },
-];
-
-const CLAIM_SECTIONS_3: { key: keyof ProspectBrief; label: string }[] = [
-  { key: "recurring_themes", label: "Recurring Themes" },
-  { key: "company_context", label: "Company & Industry Context" },
+const PUBLICATION_ACTIVITY_TYPES: ActivityType[] = [
+  "article_or_publication",
+  "interview_or_podcast",
+  "talk_or_presentation",
 ];
 
 const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
@@ -79,9 +74,21 @@ function SourceRefs({ ids, sourcesById }: { ids: string[]; sourcesById: Map<stri
   );
 }
 
-function ClaimList({ claims, sourcesById }: { claims: BriefClaim[]; sourcesById: Map<string, BriefSource> }) {
+function EmptySection({ text }: { text: string }) {
+  return <p className="text-sm text-muted-foreground">{text}</p>;
+}
+
+function ClaimList({
+  claims,
+  sourcesById,
+  emptyText = "No data for this section.",
+}: {
+  claims: BriefClaim[];
+  sourcesById: Map<string, BriefSource>;
+  emptyText?: string;
+}) {
   if (claims.length === 0) {
-    return <p className="text-sm text-muted-foreground">No data for this section.</p>;
+    return <EmptySection text={emptyText} />;
   }
   return (
     <ul className="space-y-2">
@@ -100,6 +107,72 @@ function ClaimList({ claims, sourcesById }: { claims: BriefClaim[]; sourcesById:
   );
 }
 
+function IdentityVerificationCard({ identity }: { identity: ProspectBrief["identity_verification"] }) {
+  if (!identity) {
+    return <EmptySection text="No identity verification data available." />;
+  }
+  return (
+    <div className="space-y-2 text-sm">
+      {identity.profile_url && (
+        <p>
+          <span className="font-medium">Profile used: </span>
+          <a href={identity.profile_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+            {identity.profile_url}
+          </a>
+        </p>
+      )}
+      {identity.matched_identifiers.length > 0 && (
+        <div>
+          <span className="font-medium">Matching identifiers:</span>
+          <ul className="list-disc space-y-1 pl-5">
+            {identity.matched_identifiers.map((id, i) => (
+              <li key={i}>{id}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p>
+        <span className="font-medium">Confidence: </span>
+        <Badge variant={confidenceVariant(identity.confidence)}>{identity.confidence}</Badge>
+      </p>
+      {identity.limitations && (
+        <p className="text-xs italic text-muted-foreground">{identity.limitations}</p>
+      )}
+    </div>
+  );
+}
+
+function EducationList({
+  entries,
+  sourcesById,
+}: {
+  entries: EducationEntry[];
+  sourcesById: Map<string, BriefSource>;
+}) {
+  if (entries.length === 0) {
+    return <EmptySection text="No publicly documented education history was found." />;
+  }
+  return (
+    <ul className="space-y-3">
+      {entries.map((entry, i) => (
+        <li key={i} className="text-sm">
+          <div className="font-medium">
+            {entry.degree ? `${entry.degree} ` : ""}
+            {entry.field ? `in ${entry.field} ` : ""}at {entry.institution}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {entry.start_date ?? "?"} – {entry.end_date ?? "?"} (dates {entry.date_precision})
+          </div>
+          <span className="inline-flex items-center gap-1">
+            <SourceRefs ids={entry.source_ids} sourcesById={sourcesById} />
+            <Badge variant={confidenceVariant(entry.confidence)}>{entry.confidence}</Badge>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function CareerTimelineList({
   entries,
   sourcesById,
@@ -108,7 +181,7 @@ function CareerTimelineList({
   sourcesById: Map<string, BriefSource>;
 }) {
   if (entries.length === 0) {
-    return <p className="text-sm text-muted-foreground">No career history available.</p>;
+    return <EmptySection text="No career history available." />;
   }
   return (
     <ul className="space-y-3">
@@ -118,7 +191,7 @@ function CareerTimelineList({
             {entry.title} · {entry.organization}
           </div>
           <div className="text-xs text-muted-foreground">
-            {entry.start_date ?? "?"} – {entry.end_date ?? "present"}
+            {entry.start_date ?? "?"} – {entry.end_date ?? "present"} (dates {entry.date_precision})
           </div>
           {entry.description && <p className="mt-1">{entry.description}</p>}
           <span className="inline-flex items-center gap-1">
@@ -131,9 +204,63 @@ function CareerTimelineList({
   );
 }
 
-function ActivityList({ items, sourcesById }: { items: ActivityItem[]; sourcesById: Map<string, BriefSource> }) {
+function CompanyProfileList({
+  entries,
+  sourcesById,
+}: {
+  entries: CompanyProfile[];
+  sourcesById: Map<string, BriefSource>;
+}) {
+  if (entries.length === 0) {
+    return <EmptySection text="No per-company detail available." />;
+  }
+  return (
+    <div className="space-y-4">
+      {entries.map((entry, i) => (
+        <div key={i} className="text-sm">
+          <div className="font-medium">{entry.name}</div>
+          {entry.website && (
+            <a href={entry.website} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+              {entry.website}
+            </a>
+          )}
+          {entry.what_they_do && <p>{entry.what_they_do}</p>}
+          <p className="text-muted-foreground">
+            {entry.person_role} · {entry.start_date ?? "?"} – {entry.end_date ?? "present"} (dates{" "}
+            {entry.date_precision})
+          </p>
+          {entry.role_scope && <p>{entry.role_scope}</p>}
+          {entry.related_projects.length > 0 && (
+            <ul className="list-disc space-y-1 pl-5">
+              {entry.related_projects.map((p, j) => (
+                <li key={j}>{p}</li>
+              ))}
+            </ul>
+          )}
+          {entry.uncertainty_note && (
+            <p className="text-xs italic text-muted-foreground">{entry.uncertainty_note}</p>
+          )}
+          <span className="inline-flex items-center gap-1">
+            <SourceRefs ids={entry.source_ids} sourcesById={sourcesById} />
+            <Badge variant={confidenceVariant(entry.confidence)}>{entry.confidence}</Badge>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ActivityList({
+  items,
+  sourcesById,
+  emptyText,
+}: {
+  items: ActivityItem[];
+  sourcesById: Map<string, BriefSource>;
+  emptyText: string;
+}) {
   if (items.length === 0) {
-    return <p className="text-sm text-muted-foreground">No public activity found.</p>;
+    return <EmptySection text={emptyText} />;
   }
   const grouped = new Map<ActivityType, ActivityItem[]>();
   for (const item of items) {
@@ -175,6 +302,62 @@ function ActivityList({ items, sourcesById }: { items: ActivityItem[]; sourcesBy
   );
 }
 
+function SameNameList({
+  entries,
+  sourcesById,
+}: {
+  entries: SameNameMatch[];
+  sourcesById: Map<string, BriefSource>;
+}) {
+  if (entries.length === 0) {
+    return <EmptySection text="No meaningful same-name matches were found." />;
+  }
+  return (
+    <ul className="space-y-3">
+      {entries.map((entry, i) => (
+        <li key={i} className="text-sm">
+          <div className="font-medium">{entry.name}</div>
+          <p>{entry.identity_summary}</p>
+          {entry.distinguishing_info && <p className="text-muted-foreground">{entry.distinguishing_info}</p>}
+          <p className="text-xs italic text-muted-foreground">Why confusable: {entry.why_confusable}</p>
+          <p className="text-xs italic text-muted-foreground">Why different: {entry.why_different}</p>
+          <SourceRefs ids={entry.source_ids} sourcesById={sourcesById} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function RelatedPersonalityList({
+  entries,
+  sourcesById,
+}: {
+  entries: RelatedPersonality[];
+  sourcesById: Map<string, BriefSource>;
+}) {
+  if (entries.length === 0) {
+    return <EmptySection text="No demonstrably connected personalities were found." />;
+  }
+  return (
+    <ul className="space-y-3">
+      {entries.map((entry, i) => (
+        <li key={i} className="text-sm">
+          <div className="font-medium">
+            {entry.name}
+            {entry.role ? ` · ${entry.role}` : ""}
+          </div>
+          <p className="text-muted-foreground">{entry.connection_type}</p>
+          <p>{entry.evidence}</p>
+          <span className="inline-flex items-center gap-1">
+            <SourceRefs ids={entry.source_ids} sourcesById={sourcesById} />
+            <Badge variant={entry.strength === "confirmed" ? "default" : "outline"}>{entry.strength}</Badge>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function PersonalizationHookList({
   hooks,
   sourcesById,
@@ -183,7 +366,7 @@ function PersonalizationHookList({
   sourcesById: Map<string, BriefSource>;
 }) {
   if (hooks.length === 0) {
-    return <p className="text-sm text-muted-foreground">No personalisation hooks generated.</p>;
+    return <EmptySection text="No conversation opportunities generated." />;
   }
   return (
     <ul className="space-y-3">
@@ -256,9 +439,7 @@ function OutreachStrategyCard({ strategy }: { strategy: ProspectBrief["outreach_
         strategy.primary_hooks.length === 0 &&
         !strategy.question_or_value_prop &&
         !strategy.opening_approach &&
-        strategy.avoid.length === 0 && (
-          <p className="text-muted-foreground">No outreach strategy generated.</p>
-        )}
+        strategy.avoid.length === 0 && <EmptySection text="No outreach strategy generated." />}
     </div>
   );
 }
@@ -273,7 +454,7 @@ function ResearchGapsCard({ gaps }: { gaps: ProspectBrief["research_gaps"] }) {
   ];
   const visible = sections.filter((s) => gaps[s.key].length > 0);
   if (visible.length === 0) {
-    return <p className="text-sm text-muted-foreground">No research gaps noted.</p>;
+    return <EmptySection text="No research gaps noted." />;
   }
   return (
     <div className="space-y-3 text-sm">
@@ -295,10 +476,24 @@ function sourceTypeLabel(type: BriefSource["source_type"]): string {
   return type.replace(/_/g, " ");
 }
 
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
+}
+
 export function BriefView({ brief }: { brief: ProspectBrief }) {
   const sourcesById = new Map(brief.sources.map((s) => [s.id, s]));
   const metadata = brief._synthesis_metadata;
   const isRuleBased = metadata?.synthesis_method === "rule_based";
+
+  const posts = brief.activity.filter((a) => !PUBLICATION_ACTIVITY_TYPES.includes(a.activity_type));
+  const publications = brief.activity.filter((a) => PUBLICATION_ACTIVITY_TYPES.includes(a.activity_type));
 
   return (
     <div className="space-y-4">
@@ -323,103 +518,116 @@ export function BriefView({ brief }: { brief: ProspectBrief }) {
         </Alert>
       ) : null}
 
-      {CLAIM_SECTIONS.map(({ key, label }) => (
-        <Card key={key}>
-          <CardHeader>
-            <CardTitle className="text-base">{label}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ClaimList claims={brief[key] as BriefClaim[]} sourcesById={sourcesById} />
-          </CardContent>
-        </Card>
-      ))}
+      {/* 1. Identity Verification */}
+      <Section title="Identity Verification">
+        <IdentityVerificationCard identity={brief.identity_verification} />
+      </Section>
 
+      {/* 2. Executive Overview */}
+      <Section title="Executive Overview">
+        <ClaimList claims={brief.snapshot} sourcesById={sourcesById} />
+      </Section>
+
+      {/* 3. Detailed Person Summary */}
+      <Section title="Detailed Person Summary">
+        <ClaimList claims={brief.detailed_summary} sourcesById={sourcesById} />
+      </Section>
+
+      {/* 4. Education & Early Background */}
+      <Section title="Education & Early Background">
+        <EducationList entries={brief.education} sourcesById={sourcesById} />
+      </Section>
+
+      {/* 5. Complete Career Timeline */}
+      <Section title="Complete Career Timeline">
+        <CareerTimelineList entries={brief.career_timeline} sourcesById={sourcesById} />
+      </Section>
+
+      {/* 6. Company-by-Company Overview */}
+      <Section title="Company-by-Company Overview">
+        <CompanyProfileList entries={brief.company_profiles} sourcesById={sourcesById} />
+      </Section>
+
+      {/* 7. Current Role & Responsibilities */}
+      <Section title="Current Role & Responsibilities">
+        <ClaimList claims={brief.current_role} sourcesById={sourcesById} />
+      </Section>
+
+      {/* 8. Achievements & Milestones */}
+      <Section title="Achievements & Milestones">
+        <ClaimList
+          claims={brief.achievements}
+          sourcesById={sourcesById}
+          emptyText="No independently verifiable achievements were found."
+        />
+      </Section>
+
+      {/* 9. Research, Expertise & Professional Interests */}
+      <Section title="Research, Expertise & Professional Interests">
+        <div className="space-y-4">
+          <ClaimList claims={brief.expertise} sourcesById={sourcesById} />
+          <ClaimList claims={brief.recurring_themes} sourcesById={sourcesById} />
+        </div>
+      </Section>
+
+      <Section title="Company Context">
+        <ClaimList claims={brief.company_context} sourcesById={sourcesById} />
+      </Section>
+
+      <Section title="Communication Style">
+        <ClaimList claims={brief.communication_style} sourcesById={sourcesById} />
+      </Section>
+
+      <Section title="Likely Priorities">
+        <ClaimList claims={brief.likely_priorities} sourcesById={sourcesById} />
+      </Section>
+
+      {/* 10. Posts, Reposts & Public Activity */}
+      <Section title="Posts, Reposts & Public Activity">
+        <ActivityList
+          items={posts}
+          sourcesById={sourcesById}
+          emptyText="No public posts or reposts were accessible for this person."
+        />
+      </Section>
+
+      {/* 11. Publications, Talks & Interviews */}
+      <Section title="Publications, Talks & Interviews">
+        <ActivityList
+          items={publications}
+          sourcesById={sourcesById}
+          emptyText="No publications, talks, or interviews were found."
+        />
+      </Section>
+
+      {/* 12. People with the Same Name */}
+      <Section title="People with the Same Name">
+        <SameNameList entries={brief.same_name_people} sourcesById={sourcesById} />
+      </Section>
+
+      {/* 13. Related Personalities */}
+      <Section title="Related Personalities">
+        <RelatedPersonalityList entries={brief.related_personalities} sourcesById={sourcesById} />
+      </Section>
+
+      {/* 14. Common Ground & Conversation Opportunities */}
+      <Section title="Common Ground & Conversation Opportunities">
+        <PersonalizationHookList hooks={brief.personalization_hooks} sourcesById={sourcesById} />
+      </Section>
+
+      {/* 15. Personalized Outreach Brief */}
+      <Section title="Personalized Outreach Brief">
+        <OutreachStrategyCard strategy={brief.outreach_strategy} />
+      </Section>
+
+      {/* 16. Sources & Evidence */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Career Timeline</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <CareerTimelineList entries={brief.career_timeline} sourcesById={sourcesById} />
-        </CardContent>
-      </Card>
-
-      {CLAIM_SECTIONS_2.map(({ key, label }) => (
-        <Card key={key}>
-          <CardHeader>
-            <CardTitle className="text-base">{label}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ClaimList claims={brief[key] as BriefClaim[]} sourcesById={sourcesById} />
-          </CardContent>
-        </Card>
-      ))}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Public Content & Activity</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ActivityList items={brief.activity} sourcesById={sourcesById} />
-        </CardContent>
-      </Card>
-
-      {CLAIM_SECTIONS_3.map(({ key, label }) => (
-        <Card key={key}>
-          <CardHeader>
-            <CardTitle className="text-base">{label}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ClaimList claims={brief[key] as BriefClaim[]} sourcesById={sourcesById} />
-          </CardContent>
-        </Card>
-      ))}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Communication Style</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ClaimList claims={brief.communication_style} sourcesById={sourcesById} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Likely Priorities</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ClaimList claims={brief.likely_priorities} sourcesById={sourcesById} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Personalization Opportunities</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <PersonalizationHookList hooks={brief.personalization_hooks} sourcesById={sourcesById} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Suggested Outreach Strategy</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <OutreachStrategyCard strategy={brief.outreach_strategy} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Source Register ({brief.sources.length})</CardTitle>
+          <CardTitle className="text-base">Sources & Evidence ({brief.sources.length})</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           {brief.sources.length === 0 ? (
-            <p className="text-muted-foreground">
-              No web sources — this brief was built from directly supplied
-              information only.
-            </p>
+            <EmptySection text="No web sources — this brief was built from directly supplied information only." />
           ) : (
             brief.sources.map((s) => (
               <div key={s.id}>
@@ -448,14 +656,10 @@ export function BriefView({ brief }: { brief: ProspectBrief }) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Research Gaps & Confidence</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResearchGapsCard gaps={brief.research_gaps} />
-        </CardContent>
-      </Card>
+      {/* 17. Research Gaps, Conflicts & Limitations */}
+      <Section title="Research Gaps, Conflicts & Limitations">
+        <ResearchGapsCard gaps={brief.research_gaps} />
+      </Section>
 
       <Separator />
     </div>
