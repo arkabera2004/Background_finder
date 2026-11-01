@@ -22,16 +22,32 @@ const STAGE_LABELS: Record<string, string> = {
 
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 
+function properCase(status: string): string {
+  return status
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 function StatusBadge({ status }: { status: string }) {
+  if (status === "completed") {
+    return (
+      <Badge className="border-[var(--feedback-success-stroke)] bg-[var(--feedback-success-background)] text-[var(--feedback-success-content)]">
+        {properCase(status)}
+      </Badge>
+    );
+  }
   const variant =
-    status === "completed"
-      ? "default"
-      : status === "failed"
-        ? "destructive"
-        : status === "running"
-          ? "secondary"
-          : "outline";
-  return <Badge variant={variant}>{status}</Badge>;
+    status === "failed" ? "destructive" : status === "running" ? "secondary" : "outline";
+  return <Badge variant={variant}>{properCase(status)}</Badge>;
+}
+
+function pipelineProgress(steps: RunView["steps"]): { completed: number; total: number; percent: number } {
+  const entries = Object.values(steps);
+  const completed = entries.filter((s) => s.status === "completed").length;
+  const total = entries.length;
+  const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
+  return { completed, total, percent };
 }
 
 export default function RunDetailPage() {
@@ -86,8 +102,12 @@ export default function RunDetailPage() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Pipeline progress</CardTitle>
+          <span className="text-sm text-muted-foreground tabular-nums">
+            {pipelineProgress(run.steps).completed}/{pipelineProgress(run.steps).total} ·{" "}
+            {pipelineProgress(run.steps).percent}%
+          </span>
         </CardHeader>
         <CardContent className="space-y-2">
           {Object.entries(run.steps).map(([stage, step]) => (
