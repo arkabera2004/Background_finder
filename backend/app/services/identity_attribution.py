@@ -66,6 +66,14 @@ _GENERIC_FINGERPRINT_WORDS = {
     "technologies", "business", "group", "solutions", "systems", "services",
     "international", "corporation", "company", "officer", "lead", "team",
     "digital", "engineering", "product", "products", "management",
+    # Structural words common to any institution's name — matching on these
+    # alone is not evidence two different "Institute"s or "University"s are
+    # the same one. Caught live: "Indian Institute of Technology" (the
+    # subject's real cert) and "Institute for Plasma Research" (an
+    # unrelated namesake's affiliation) only shared the word "institute".
+    "institute", "institutes", "university", "universities", "college",
+    "colleges", "school", "schools", "academy", "academies", "research",
+    "national", "foundation", "center", "centre", "centers", "centres",
 }
 
 

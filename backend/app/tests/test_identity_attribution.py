@@ -92,6 +92,20 @@ def test_augment_fingerprint_ignores_mentions_in_text_without_the_subjects_name(
     assert fp.schools == set()
 
 
+def test_generic_institution_words_dont_create_a_false_match():
+    """Regression caught live: "Indian Institute of Technology" (a real
+    certification, legitimately in the fingerprint) and "Institute for
+    Plasma Research" (an unrelated namesake's affiliation) share only the
+    structural word "institute" — that must not count as corroboration."""
+    fp = _fp(schools={"Indian Institute of Technology"})
+    text = (
+        "Vineet Shukla, Post Doctoral Fellow, Institute for Plasma Research, "
+        "Gandhinagar. Cited by 24. Contact Vineet Shukla."
+    )
+    verdict, _ = score_item(text, fp)
+    assert verdict != "subject"
+
+
 def test_canonical_url_merges_www_and_in_subdomain_and_query_string():
     a = canonical_url("https://www.linkedin.com/in/shuklavineet/")
     b = canonical_url("https://in.linkedin.com/in/shuklavineet?trk=public")
