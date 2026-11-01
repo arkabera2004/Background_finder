@@ -92,13 +92,20 @@ class IdentityFingerprint:
     known_other_employers: set[str] = field(default_factory=set)
 
     def fingerprint_tokens(self) -> set[str]:
+        # Deliberately excludes `titles`/headline words and `location`: a
+        # live audit caught two different real namesakes (a documentary
+        # filmmaker, a hospitality manager) scoring as "subject" because
+        # generic headline language ("visionary", "hands-on") or a common
+        # place name coincidentally appeared in their unrelated bios.
+        # Employers and schools are specific proper nouns and far less
+        # prone to that kind of accidental overlap; the profile URL slug
+        # is effectively unique. Titles alone are too weak a signal to
+        # trust for identity corroboration.
         tokens: set[str] = set()
-        for value in (*self.employers, *self.titles, *self.schools):
+        for value in (*self.employers, *self.schools):
             tokens |= _tokens(value)
         if self.profile_slug:
             tokens |= _tokens(self.profile_slug)
-        if self.location:
-            tokens |= _tokens(self.location)
         # Single common words (e.g. "data", "senior") are too weak alone to
         # count as corroboration — require a distinctive token, long enough
         # and not a generic job-title/business word.

@@ -106,6 +106,18 @@ def test_generic_institution_words_dont_create_a_false_match():
     assert verdict != "subject"
 
 
+def test_generic_headline_words_dont_create_a_false_match():
+    """Regression caught live: two different real namesakes (a documentary
+    filmmaker, a hospitality manager) scored as "subject" because generic
+    headline language ("visionary", "hands-on") coincidentally appeared
+    somewhere in their unrelated bios. Title/headline words are too weak
+    and too common to trust as identity corroboration on their own."""
+    fp = _fp(titles={"AI & Data Science Visionary, Hands-On CTO"})
+    text = "Vineet Shukla is a Sheffield-based filmmaker with a hands-on approach to every project."
+    verdict, _ = score_item(text, fp)
+    assert verdict != "subject"
+
+
 def test_canonical_url_merges_www_and_in_subdomain_and_query_string():
     a = canonical_url("https://www.linkedin.com/in/shuklavineet/")
     b = canonical_url("https://in.linkedin.com/in/shuklavineet?trk=public")
