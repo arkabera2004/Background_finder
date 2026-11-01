@@ -1,5 +1,5 @@
 from app.providers.profile_provider import ProfileProvider, ProviderUnavailableError
-from app.schemas.profile import Person
+from app.schemas.profile import EducationRecord, Experience, Person
 
 # Bright Data's LinkedIn "People Profile" dataset — see
 # https://docs.brightdata.com/products/scrapers/linkedin/quickstart
@@ -138,5 +138,62 @@ class BrightDataProvider(ProfileProvider):
             headline=headline,
             current_company=current_company.get("name"),
             linkedin_url=linkedin_url,
+            experiences=_parse_experiences(record),
+            education=_parse_education(record),
             source=self.name,
         )
+
+
+def _parse_experiences(record: dict) -> list[Experience]:
+    """Bright Data's LinkedIn People Profile dataset field is "experience"
+    (singular), a list of dicts. Field names inside each entry have not been
+    confirmed against a live response (no fixture available), so this reads
+    several plausible key spellings and degrades to an empty list — never a
+    crash — for any entry it can't make sense of, per this codebase's
+    honest-degradation convention."""
+    raw_experiences = record.get("experience") or record.get("experiences") or []
+    experiences: list[Experience] = []
+    for item in raw_experiences:
+        if not isinstance(item, dict):
+            continue
+        title = item.get("title") or item.get("position")
+        company = item.get("company") or item.get("company_name") or item.get("subtitle")
+        if not title or not company:
+            continue
+        start = item.get("start_date") or item.get("date_from")
+        end = item.get("end_date") or item.get("date_to")
+        experiences.append(
+            Experience(
+                title=title,
+                company=company,
+                start_date=str(start) if start is not None else None,
+                end_date=str(end) if end is not None else None,
+                description=item.get("description"),
+            )
+        )
+    return experiences
+
+
+def _parse_education(record: dict) -> list[EducationRecord]:
+    """Same caveat as _parse_experiences: Bright Data's "education" field
+    shape is read defensively across likely key names, not confirmed live."""
+    raw_education = record.get("education") or []
+    education: list[EducationRecord] = []
+    for item in raw_education:
+        if not isinstance(item, dict):
+            continue
+        institution = item.get("title") or item.get("school") or item.get("institution")
+        if not institution:
+            continue
+        start = item.get("start_date") or item.get("start_year")
+        end = item.get("end_date") or item.get("end_year")
+        education.append(
+            EducationRecord(
+                institution=institution,
+                degree=item.get("degree"),
+                field=item.get("field") or item.get("field_of_study"),
+                start_date=str(start) if start is not None else None,
+                end_date=str(end) if end is not None else None,
+            )
+        )
+    return education
