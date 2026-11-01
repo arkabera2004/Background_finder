@@ -372,7 +372,14 @@ class SynthesiseBriefStage(Stage):
         person = ctx.outputs.get("_person")
         person_data = person.model_dump() if person is not None else None
 
+        # profile_source goes first so it wins dedup below if the person's
+        # own profile URL also surfaces as a web-footprint search hit
+        # (audit F5: [profile] and a search-channel copy of the same URL
+        # were previously counted as two separate sources).
         sources_raw: list[dict] = []
+        profile_source = ctx.outputs.get("_profile_source")
+        if profile_source is not None:
+            sources_raw.append(profile_source)
         for stage_name in (
             StageName.RESEARCH_COMPANY.value,
             StageName.WEB_FOOTPRINT.value,
@@ -380,9 +387,17 @@ class SynthesiseBriefStage(Stage):
         ):
             sources_raw.extend(ctx.outputs.get(f"_sources_{stage_name}", []))
 
-        profile_source = ctx.outputs.get("_profile_source")
-        if profile_source is not None:
-            sources_raw.append(profile_source)
+        seen_source_urls: set[str] = set()
+        deduped_raw: list[dict] = []
+        for s in sources_raw:
+            url = s.get("url")
+            if not url:
+                continue
+            key = canonical_url(url)
+            if key in seen_source_urls:
+                continue
+            seen_source_urls.add(key)
+            deduped_raw.append(s)
 
         sources = [
             Source(
@@ -394,8 +409,7 @@ class SynthesiseBriefStage(Stage):
                 publisher=s.get("publisher"),
                 published_at=s.get("published_at"),
             )
-            for i, s in enumerate(sources_raw)
-            if s.get("url")
+            for i, s in enumerate(deduped_raw)
         ]
 
         career = ctx.outputs.get(StageName.ANALYSE_CAREER.value, {})

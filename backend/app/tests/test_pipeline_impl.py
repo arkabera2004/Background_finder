@@ -88,6 +88,38 @@ async def test_synthesise_brief_stage_wires_career_activity_and_profile_source()
 
 
 @pytest.mark.asyncio
+async def test_synthesise_brief_stage_dedupes_duplicate_source_urls():
+    """Regression (F5): the person's own profile URL surfacing a second
+    time via a search-derived channel must collapse into one source, not
+    be counted twice."""
+    person = Person(
+        full_name="Jane Doe",
+        linkedin_url="https://www.linkedin.com/in/janedoe/",
+        source="manual",
+    )
+    ctx = StageContext(run_id="r-dedup", depth="standard")
+    ctx.outputs["_person"] = person
+    ctx.outputs[StageName.ANALYSE_CAREER.value] = {"career_timeline": []}
+    ctx.outputs[StageName.ANALYSE_ACTIVITY.value] = {"activity": []}
+    ctx.outputs[f"_sources_{StageName.ANALYSE_ACTIVITY.value}"] = []
+    ctx.outputs[f"_sources_{StageName.RESEARCH_COMPANY.value}"] = []
+    ctx.outputs[f"_sources_{StageName.WEB_FOOTPRINT.value}"] = [
+        {"url": "https://in.linkedin.com/in/janedoe", "title": "Jane Doe"},
+    ]
+    ctx.outputs["_profile_source"] = {
+        "id": "profile",
+        "url": "https://www.linkedin.com/in/janedoe/",
+        "source_type": "social_profile",
+    }
+
+    result = await SynthesiseBriefStage().run(ctx)
+
+    linkedin_sources = [s for s in result.output["sources"] if "janedoe" in s["url"]]
+    assert len(linkedin_sources) == 1
+    assert linkedin_sources[0]["id"] == "profile"
+
+
+@pytest.mark.asyncio
 async def test_synthesise_brief_stage_merges_activity_from_web_footprint_and_analyse_activity():
     ctx = StageContext(run_id="r-merge", depth="standard")
     ctx.outputs["_person"] = None
