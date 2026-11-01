@@ -31,12 +31,13 @@ SYSTEM_INSTRUCTIONS = """You are producing a structured Prospect Brief as JSON.
 
 Rules you MUST follow:
 - Only use facts present in the provided research data below. Never invent names, titles, companies, dates, or events.
-- Every factual claim in snapshot/current_role/company_overview/expertise/recurring_themes/company_context/communication_style/likely_priorities MUST either:
+- Every factual claim in snapshot/current_role/company_overview/achievements/expertise/recurring_themes/company_context/communication_style/likely_priorities MUST either:
   (a) include a source_ids list referencing one of the provided source "id" values, OR
   (b) be marked "is_inference": true if it's a reasonable inference rather than a directly observed fact.
 - Each claim object may also include an optional "date" field (string, e.g. "2026-03" or "2026-03-15"). Populate it when the claim describes a specific dated event or announcement (e.g. company news, a funding round, a product launch); otherwise leave it null. Never invent a date that isn't supported by the source.
 - NEVER invent a source_id that isn't in the provided sources list. NEVER invent a URL.
-- career_timeline entries must come only from the supplied career data, verbatim or lightly reworded — do not add entries, do not invent dates or roles.
+- career_timeline entries must come only from the supplied career data, verbatim or lightly reworded — do not add entries, do not invent dates or roles. Set "date_precision" to "exact" only when the supplied data gives a full year+month; "approximate" when only a year or a vague range is given; "unknown" when no date was supplied — never guess a date to make it exact.
+- "achievements" is for awards, recognitions, promotions, launches, publications, or other publicly documented impact — only include one if it's explicitly supported by a source or the supplied career/activity data; leave the list empty rather than inferring generic accomplishments from a job title.
 - activity entries must come only from supplied activity data — do not add entries.
 - Generate 0-7 "personalization_hooks", each with source_ids referencing only provided sources. If there isn't enough material, return fewer hooks or none — do not pad with generic flattery.
 - If sources conflict (e.g. two different dates/companies for the same role), add an entry to research_gaps.conflicting_information describing the conflict instead of picking one silently.
@@ -48,7 +49,8 @@ Rules you MUST follow:
   "snapshot": [{"text": string, "source_ids": [string], "confidence": "high"|"medium"|"low", "is_inference": bool, "date": string|null}],
   "current_role": [...same claim shape...],
   "company_overview": [...same claim shape...],
-  "career_timeline": [{"organization": string, "title": string, "start_date": string|null, "end_date": string|null, "description": string|null, "source_ids": [string], "confidence": "high"|"medium"|"low"}],
+  "career_timeline": [{"organization": string, "title": string, "start_date": string|null, "end_date": string|null, "date_precision": "exact"|"approximate"|"unknown", "description": string|null, "source_ids": [string], "confidence": "high"|"medium"|"low"}],
+  "achievements": [...same claim shape...],
   "expertise": [...same claim shape...],
   "activity": [{"activity_type": string, "topic": string, "summary": string, "url": string, "published_at": string|null, "authored_by_person": bool, "relevance": string|null, "confidence": "high"|"medium"|"low", "source_ids": [string]}],
   "recurring_themes": [...same claim shape...],
@@ -227,6 +229,7 @@ def rule_based_synthesis(
     if not activity_items:
         missing_information.append("No activity could be derived without AI synthesis")
     missing_information.append("No company overview could be derived without AI synthesis")
+    missing_information.append("No achievements could be derived without AI synthesis")
     missing_information.append("No recurring themes could be derived without AI synthesis")
     missing_information.append("No company context could be derived without AI synthesis")
     missing_information.append("No expertise summary could be derived without AI synthesis")
