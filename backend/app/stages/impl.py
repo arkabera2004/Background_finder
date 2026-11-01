@@ -7,7 +7,6 @@ stages are data-limited without Tavily/Firecrawl/Bright Data/PDL/Anthropic.
 """
 
 import logging
-from dataclasses import replace
 
 from app.providers.ai_provider import AiProvider
 from app.providers.company_crawler import CompanyCrawler
@@ -20,7 +19,6 @@ from app.services.brief_enrichment import enrich_brief
 from app.services.career_analysis import analyse_career, build_career_timeline
 from app.services.company_discovery import discover_company_domain, page_mentions_company
 from app.services.identity_attribution import (
-    augment_fingerprint_with_mentions,
     build_fingerprint,
     canonical_url,
     normalized_title,
@@ -268,24 +266,19 @@ class WebFootprintStage(Stage):
                 seen_canonical.add(key)
                 merged.append(r)
 
-        # Bootstrap the fingerprint's schools from OTHER results in this run
-        # before scoring each item — e.g. a thin/stale profile snapshot with
-        # no education data shouldn't cause a fresh, high-signal source (one
-        # that names the subject and their school) to be scored against an
-        # incomplete fingerprint, when a second source corroborates it.
-        #
-        # Deliberately NOT self-referential: a candidate is never augmented
-        # with institution mentions from its own text. A live test caught
-        # the obvious exploit — a same-named documentary filmmaker's bio
-        # mentions his own (unrelated) university, which would otherwise
-        # feed straight back into the fingerprint used to score that exact
-        # item, self-validating it as the subject regardless of how
-        # different his actual career is. Cross-item corroboration avoids
-        # that; it costs the single-source case (one fresh post naming both
-        # the subject and a school, nothing else corroborating it) by
-        # leaving it "unverified" rather than "subject" — the safer error
-        # per the audit's own standard ("never force uncertain items into
-        # Subject or Namesake").
+        # NOTE: an earlier version of this stage bootstrapped the
+        # fingerprint's schools from other results in the same run (to
+        # recover from a thin profile snapshot with no education data).
+        # Removed after live testing proved it exploitable: when a same-
+        # named namesake has multiple pages in the results (common for
+        # anyone with a public web presence), those pages cross-corroborate
+        # each other via genuinely shared details — e.g. two different
+        # articles about the same wrong documentary filmmaker both mention
+        # his real university, so each validated the other as "the subject"
+        # even with the earlier self-reference guard in place. Scoring now
+        # only trusts the fingerprint built from the profile provider's own
+        # data; a thin snapshot means more items land in "unverified"
+        # rather than a possibly-wrong "subject" — the safer failure mode.
         item_texts = [f"{r.title or ''} {r.snippet or ''}" for r in merged]
 
         sources: list[dict] = []
@@ -304,11 +297,7 @@ class WebFootprintStage(Stage):
             if title_key and title_key in seen_titles:
                 continue
 
-            item_fp = replace(fp, schools=set(fp.schools))
-            augment_fingerprint_with_mentions(
-                item_fp, [t for j, t in enumerate(item_texts) if j != i]
-            )
-            verdict, _hits = score_item(text, item_fp)
+            verdict, _hits = score_item(text, fp)
             if verdict == "drop":
                 continue
             if verdict == "unverified":

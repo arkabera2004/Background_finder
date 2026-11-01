@@ -209,9 +209,23 @@ async def test_vineet_shukla_regression_fixture_matches_audit_acceptance_criteri
     assert "https://topmate.io/vineet_shukla91" not in activity_urls
     assert "https://topmate.io/sessions/vineet_shukla91/risk-strategy" not in activity_urls
 
-    # [ ] namesake-11 (MNNIT E-Summit Instagram post) classified as Subject
-    #     via the full career/education fingerprint, not one stale employer
-    assert "https://instagram.com/p/mnnit-esummit-renaissance-2026" in activity_urls
+    # [ ] namesake-11 (MNNIT E-Summit Instagram post): documented deviation
+    #     from the audit's literal "must be Subject" expectation. A later
+    #     live-verification pass (not this synthetic fixture) found that
+    #     cross-item fingerprint augmentation — the only mechanism that
+    #     could promote this single-source item to Subject — is exploitable:
+    #     when a namesake has *multiple* pages in the results (the common
+    #     case for anyone with a public web presence), those pages
+    #     genuinely corroborate each other and wrongly validate as "the
+    #     subject". That mechanism was removed (see WebFootprintStage).
+    #     With only the profile provider's own data as the fingerprint, an
+    #     isolated source with nothing else corroborating it correctly
+    #     lands in "unverified" — the safer failure mode per the audit's
+    #     own principle ("never force uncertain items into Subject or
+    #     Namesake"). Per the task instructions: this is an explicit,
+    #     documented reclassification, not a silent one.
+    assert "https://instagram.com/p/mnnit-esummit-renaissance-2026" not in activity_urls
+    assert "https://instagram.com/p/mnnit-esummit-renaissance-2026" not in same_name_urls
 
     # [ ] No item appears in more than one bucket
     assert activity_urls.isdisjoint(same_name_urls)
