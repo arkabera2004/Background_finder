@@ -16,6 +16,30 @@ from app.providers.search_provider import SearchProvider
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 
+# Company-data aggregator/directory sites list thousands of companies, each
+# on its own page whose title plausibly contains the target company's name
+# — so a naive token match treats them as a strong hit. Crawling one of
+# these then pulls in sibling pages for unrelated companies (confirmed
+# live: a JoulestoWatts lookup resolved to a LeadIQ listing page and the
+# subsequent crawl returned 15 pages for 15 different unrelated companies).
+_AGGREGATOR_DOMAINS = {
+    "leadiq.com",
+    "zoominfo.com",
+    "crunchbase.com",
+    "owler.com",
+    "linkedin.com",
+    "bloomberg.com",
+    "pitchbook.com",
+    "rocketreach.co",
+    "apollo.io",
+    "dnb.com",
+    "glassdoor.com",
+    "indeed.com",
+    "wikipedia.org",
+    "signalhire.com",
+    "wellfound.com",
+}
+
 # Generic business words that don't distinguish one company from another —
 # a match on only these would confidently crawl the wrong company's site.
 _GENERIC_TOKENS = {
@@ -71,7 +95,10 @@ async def discover_company_domain(search: SearchProvider, company_name: str) -> 
         return None
 
     match = None
-    for candidate in results[:3]:
+    for candidate in results[:5]:
+        hostname = urlparse(candidate.url).netloc.lower().removeprefix("www.")
+        if any(hostname == d or hostname.endswith(f".{d}") for d in _AGGREGATOR_DOMAINS):
+            continue
         if _plausible_match(company_name, candidate.title, candidate.snippet):
             match = candidate
             break

@@ -41,6 +41,49 @@ async def test_discover_company_domain_returns_domain_on_confident_match():
 
 
 @pytest.mark.asyncio
+async def test_discover_company_domain_skips_aggregator_sites():
+    """Regression: a LeadIQ listing page for the company plausibility-
+    matches on tokens (its title names the company), but crawling it pulls
+    in sibling pages for unrelated companies. The real site, if present
+    further down the results, must win instead."""
+    search = FakeSearchProvider(
+        [
+            SearchResult(
+                url="https://leadiq.com/c/joulestowatts-business-solutions",
+                title="JoulestoWatts Business Solutions - Company Profile | LeadIQ",
+                snippet="Find contacts at JoulestoWatts Business Solutions.",
+            ),
+            SearchResult(
+                url="https://joulestowatts.com",
+                title="JoulestoWatts Business Solutions - Official Website",
+                snippet="JoulestoWatts provides energy consulting services.",
+            ),
+        ]
+    )
+
+    domain = await discover_company_domain(search, "JoulestoWatts Business Solutions")
+
+    assert domain == "joulestowatts.com"
+
+
+@pytest.mark.asyncio
+async def test_discover_company_domain_returns_none_when_only_aggregators_match():
+    search = FakeSearchProvider(
+        [
+            SearchResult(
+                url="https://leadiq.com/c/acme-robotics",
+                title="Acme Robotics - Company Profile | LeadIQ",
+                snippet="Find contacts at Acme Robotics.",
+            ),
+        ]
+    )
+
+    domain = await discover_company_domain(search, "Acme Robotics")
+
+    assert domain is None
+
+
+@pytest.mark.asyncio
 async def test_discover_company_domain_returns_none_on_zero_results():
     search = FakeSearchProvider([])
 

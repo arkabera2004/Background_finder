@@ -1,0 +1,79 @@
+from app.schemas.profile import EducationRecord, Experience
+from app.services.identity_attribution import (
+    build_fingerprint,
+    canonical_url,
+    normalized_title,
+    score_item,
+)
+
+
+def _fp(**overrides):
+    fp = build_fingerprint(
+        full_name="Vineet Shukla",
+        linkedin_url="https://linkedin.com/in/shuklavineet",
+        current_company="JoulestoWatts Business Solutions",
+        headline="AI & Data Science Visionary, Hands-On CTO",
+        experiences=[
+            Experience(title="VP, Head of Data", company="Mahindra Group"),
+            Experience(title="Senior Director, Data Science and ML", company="UnitedHealth Group"),
+        ],
+        education=[EducationRecord(institution="IIM Bangalore"), EducationRecord(institution="MNNIT Allahabad")],
+    )
+    for key, value in overrides.items():
+        setattr(fp, key, value)
+    return fp
+
+
+def test_subjects_own_coverage_scores_as_subject_via_past_employer():
+    """Regression for F1: the subject's own interview about a past role
+    (not the current employer) must not be rejected for lacking a match
+    against the *current* employer alone."""
+    fp = _fp()
+    text = "Vineet Shukla, CTO, Mahindra Teqo, formerly Head of Data at Mahindra Group"
+    verdict, score = score_item(text, fp)
+    assert verdict == "subject"
+    assert score >= 1
+
+
+def test_item_with_no_fingerprint_hit_is_unverified_not_namesake():
+    """Regression: absence of corroboration must not be treated as proof
+    of a different person — that was the old (wrong) behavior."""
+    fp = _fp()
+    text = "Vineet Shukla speaking at an industry event, October 2026"
+    verdict, _ = score_item(text, fp)
+    assert verdict == "unverified"
+
+
+def test_item_matching_a_known_other_employer_is_namesake():
+    fp = _fp(known_other_employers={"HCLTech"})
+    text = "Vineet Shukla, VP and Regional Business Head at HCLTech, speaks at GITEX 2025"
+    verdict, _ = score_item(text, fp)
+    assert verdict == "namesake"
+
+
+def test_namesake_conflict_does_not_override_a_real_corroborated_match():
+    """If the same text also corroborates the subject's own fingerprint, a
+    coincidental generic-word overlap with a known-other-employer string
+    must not force a false namesake verdict."""
+    fp = _fp(known_other_employers={"HCLTech"})
+    text = "Vineet Shukla, CTO at Mahindra Teqo, formerly of Mahindra Group"
+    verdict, _ = score_item(text, fp)
+    assert verdict == "subject"
+
+
+def test_text_not_mentioning_the_name_is_dropped():
+    fp = _fp()
+    verdict, _ = score_item("JoulestoWatts announces a new product launch", fp)
+    assert verdict == "drop"
+
+
+def test_canonical_url_merges_www_and_in_subdomain_and_query_string():
+    a = canonical_url("https://www.linkedin.com/in/shuklavineet/")
+    b = canonical_url("https://in.linkedin.com/in/shuklavineet?trk=public")
+    assert a == b
+
+
+def test_normalized_title_ignores_punctuation_and_case():
+    assert normalized_title("Mahindra Teqo: CTO Appointment!") == normalized_title(
+        "mahindra teqo cto appointment"
+    )
