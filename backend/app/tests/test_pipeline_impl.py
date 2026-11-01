@@ -629,6 +629,46 @@ async def test_web_footprint_classifies_as_namesake_when_employer_conflict_is_kn
 
 
 @pytest.mark.asyncio
+async def test_fingerprint_augmentation_is_not_self_referential():
+    """Regression caught during live verification: a same-named documentary
+    filmmaker's bio mentions his own (unrelated) university. If that
+    mention were allowed to augment the very fingerprint used to score
+    that same item, it would self-validate as the subject regardless of
+    how different the actual career is. Must land as unverified, not
+    subject, when nothing else in the run corroborates it."""
+    from app.providers.search_provider import SearchResult
+
+    search = _FakeSearchProvider(
+        [
+            SearchResult(
+                url="https://filmfreeway.example/vineet-shukla",
+                title="Vineet Shukla | Award-Winning UK Documentary Filmmaker",
+                snippet=(
+                    "Vineet Shukla is a Sheffield-based filmmaker. Education: Delhi "
+                    "University BA Hons Political Science; Sheffield Hallam "
+                    "University MA Digital Media Management."
+                ),
+            ),
+        ]
+    )
+    stage = WebFootprintStage(search)
+    ctx = StageContext(run_id="r-self-ref", depth="standard")
+    ctx.outputs["_person"] = Person(
+        full_name="Vineet Shukla",
+        current_company="JoulestoWatts Business Solutions",
+        headline="AI & Data Science Visionary, Hands-On CTO",
+        source="manual",
+    )
+
+    result = await stage.run(ctx)
+
+    urls = {item["url"] for item in result.output["activity"]}
+    assert "https://filmfreeway.example/vineet-shukla" not in urls
+    same_name_urls = {c["url"] for c in result.output["same_name_candidates"]}
+    assert "https://filmfreeway.example/vineet-shukla" not in same_name_urls
+
+
+@pytest.mark.asyncio
 async def test_web_footprint_corroborates_against_past_employer_not_just_current():
     """Regression: a past employer in person.experiences (field `company`,
     not `organization`) must count as corroboration too."""
