@@ -8,6 +8,10 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./e2e",
+  // authenticated/* belongs to playwright.auth.config.ts (real servers,
+  // real Supabase session) — never pick those up under the placeholder-env
+  // build this config starts.
+  testIgnore: "**/authenticated/**",
   fullyParallel: true,
   retries: 0,
   reporter: "list",

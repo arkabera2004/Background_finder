@@ -44,3 +44,6 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 /blob-report/
+# saved real-session storage state from auth.setup.ts — contains live
+# Supabase auth tokens, must never be committed
+/e2e/.auth/
