@@ -45,7 +45,7 @@ test("submitting pasted profile text runs the pipeline to completion", async ({ 
   // configured/reachable, or via a real (slow) AI call otherwise — either
   // way it must reach this terminal, brief-rendered state.
   await expect(page.getByRole("button", { name: "Save to Prospect Library" })).toBeVisible({
-    timeout: 260_000,
+    timeout: 420_000,
   });
   await expect(page.getByText(`Prospect Brief: ${uniqueName}`)).toBeVisible();
   // Section titles render as plain styled <div>s (CardTitle), not <h*>

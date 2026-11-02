@@ -27,7 +27,7 @@ test("saving a completed run creates a prospect with working exports", async ({ 
   // run.status === "completed" && run.brief, so it's the real signal to
   // wait for, not a step-level text match.
   const saveButton = page.getByRole("button", { name: "Save to Prospect Library" });
-  await expect(saveButton).toBeVisible({ timeout: 260_000 });
+  await expect(saveButton).toBeVisible({ timeout: 420_000 });
 
   await saveButton.click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]+$/, { timeout: 15_000 });

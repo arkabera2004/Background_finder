@@ -22,11 +22,24 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e/authenticated",
   fullyParallel: false,
+  // Serial execution: two concurrent real research submissions both hit
+  // the single backend process and the same external provider API keys
+  // (Gemini/Tavily rate limits) — avoid that contention even though it
+  // wasn't the actual cause of the timeout below (see that comment).
+  workers: 1,
   retries: 0,
-  // Observed live: a real Gemini synthesis call can take 2-3 minutes
-  // (thinking-model overhead, see backend's ai_brief_synthesizer.py), on
-  // top of the pipeline's other stages — 180s was cutting it close.
-  timeout: 280_000,
+  // Root-caused live, not guessed: GeminiProvider.complete() (backend)
+  // retries up to 3 total attempts (max_retries=2) on a timeout, each with
+  // its own 120s httpx timeout and 1s/2s backoff between — worst case
+  // ~363s for ONE synthesis call if Gemini is merely slow rather than
+  // erroring (a fast 5xx falls back to rule-based almost immediately and
+  // isn't the issue; a *slow* response is). Confirmed via backend logs: one
+  // run fell back in ~25s after a 503, a different run — same code, same
+  // test, run moments apart — was still in Gemini's retry loop past the
+  // previous 260s timeout. This is real external API latency variance,
+  // not a bug in the app or the test; size the timeout to outlast it
+  // rather than treat the symptom.
+  timeout: 450_000,
   reporter: "list",
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3010",

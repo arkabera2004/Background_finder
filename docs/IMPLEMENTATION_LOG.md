@@ -63,3 +63,66 @@ Next exact task on resume: Phase 1 — `POST /research` intake
 (LinkedIn URL / name+company / paste / PDF), identity resolution,
 the seven-stage pipeline skeleton, and the `/research/new` +
 `/research/new/resolve` + `/runs/[id]` frontend pages with SSE.
+
+**Note (2026-11-02): this file was not kept up to date past Phase 0.**
+Phases 1 onward actually happened and are real, committed, pushed work
+(through commit `0ff806c`) — see `docs/PHASE_TRACKER.md` for the
+authoritative, now-current phase table and `docs/PROJECT_CURRENT_STATE.md`
+for the full evidence-based audit. This file's task-by-task table format
+was effectively abandoned after Phase 0 in favor of `PHASE_TRACKER.md`'s
+per-phase summary rows; treat this file as a historical record of Phase 0
+only, not a live log.
+
+## 2026-11-02 — Repository audit and new-chat handoff prep
+
+No feature code changed this session. Task was to produce a
+repository-grounded handoff for a new chat (prior conversation's context
+window full), per explicit instruction to re-verify rather than trust
+prior status claims.
+
+What was done:
+
+- Re-ran the full verification suite from scratch: backend `pytest -q`
+  (**283 passed**, up from the 228 last recorded in `PHASE_TRACKER.md`),
+  `ruff check app main.py` (0 errors), `mypy app main.py
+  --ignore-missing-imports` (0 errors, CI's exact invocation); frontend
+  `tsc --noEmit` (clean), `eslint src` (0 errors, 3 warnings — 1 new and
+  previously undocumented, `no-img-element` in `components/logo.tsx`),
+  `npm run build` (succeeds), unauthenticated Playwright suite (7/7
+  pass); `brief-schema.json` drift check (no drift).
+- Inspected real GitHub Actions history via `gh run list`/`gh run view`
+  rather than assuming CI status from the latest commit message: found
+  every push-triggered `CI` run from `18b32aa` through the
+  second-to-last commit was **red** on a frontend `tsc` issue (fixed
+  only in the final commit, `0ff806c`), and found the manual-dispatch
+  `e2e-auth` job (real Supabase + real Gemini) has failed in both
+  attempts on record, specifically at the step that waits for a real
+  research pipeline run to reach "Completed" — the other 5 of 6 specs
+  in that suite (login, navigation, prospect-save) pass live.
+- Read every file under `docs/` plus the actual provider-selector source
+  code (`ai_selector.py`, `search_provider.py`, `company_crawler.py`) to
+  confirm or correct every "implemented" claim rather than trusting
+  prose: found Ollama support was removed from the code (contradicting
+  older doc/memory claims about a live Ollama verification), and found
+  `search_provider=exa`/`brave` and `JINA_READER_API_KEY` are configured
+  in settings/`.env.example` but have zero implementation behind them
+  (silently no-op, not an error).
+- Corrected the stale Ollama and Exa/Brave claims in-place in
+  `docs/PHASE_TRACKER.md`'s existing rows, and added rows for the ~36
+  commits of real work (Chronos design system, 17-section brief schema,
+  unified identity-attribution scorer + 5 correctness fixes,
+  authenticated E2E suite, CI fix) that had never been written up there.
+- Wrote `docs/PROJECT_CURRENT_STATE.md` (full evidence-based audit) and
+  `docs/NEW_CHAT_HANDOFF.md` (concise handoff + starter prompt for the
+  next chat) from scratch — neither existed before this session.
+
+Git: working tree had two pre-existing uncommitted items at audit start
+(a `.gitignore` addition, an untracked completed-but-uncommitted plan
+file) — neither created by this session; both left as found and flagged
+in `docs/PROJECT_CURRENT_STATE.md` rather than silently committed or
+deleted. This session's own documentation changes were committed
+separately as a small, atomic commit.
+
+Next exact task (see `docs/NEW_CHAT_HANDOFF.md` §6 for detail): diagnose
+and fix why the authenticated E2E suite's research-pipeline-completion
+test times out against real Supabase + real Gemini in CI.
