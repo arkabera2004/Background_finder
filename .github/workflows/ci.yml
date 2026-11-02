@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   backend:
@@ -46,3 +47,91 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test
+
+  # Hits the real Supabase project and, through the backend pipeline, real
+  # external APIs (Tavily search, Gemini) that cost money and take minutes
+  # per run — deliberately manual-only (workflow_dispatch), never on
+  # push/PR. Run it from the Actions tab when you want to verify the
+  # authenticated suite still passes against the live stack.
+  #
+  # Required repo secrets (Settings -> Secrets and variables -> Actions):
+  #   SUPABASE_URL, SUPABASE_ANON_KEY   - this project's real Supabase values
+  #   GEMINI_API_KEY                    - for AI synthesis (falls back to
+  #                                        rule-based honestly if absent/fails)
+  #   TAVILY_API_KEY                    - for web-footprint search (optional;
+  #                                        falls back to keyless DuckDuckGo)
+  #   E2E_EMAIL, E2E_PASSWORD           - a real test account in that Supabase
+  #                                        project (see frontend/e2e/README.md
+  #                                        for how one was created)
+  # BRIGHTDATA_API_KEY is deliberately NOT used here — the e2e suite only
+  # exercises Paste Profile Text intake, which never calls Bright Data.
+  e2e-auth:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+      - name: Start backend
+        working-directory: backend
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          AI_PROVIDER: gemini
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SEARCH_PROVIDER: ${{ secrets.TAVILY_API_KEY && 'tavily' || 'duckduckgo' }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          CORS_ORIGINS: '["http://localhost:3010"]'
+        run: |
+          nohup python -m uvicorn main:app --host 127.0.0.1 --port 8010 > backend.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8010/health && break
+            sleep 1
+          done
+          curl -sf http://localhost:8010/health || (cat backend.log && exit 1)
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Start frontend
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_API_URL: http://localhost:8010
+        run: |
+          nohup npm run dev -- -p 3010 > frontend.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:3010/login > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:3010/login > /dev/null || (cat frontend.log && exit 1)
+
+      - name: Run authenticated e2e suite
+        working-directory: frontend
+        env:
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+          E2E_BASE_URL: http://localhost:3010
+        run: npm run test:e2e:auth
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-auth-traces
+          # playwright.auth.config.ts sets trace: "retain-on-failure" —
+          # this is where failed-test traces/screenshots land, not
+          # playwright-report/ (no html reporter configured for this suite).
+          path: frontend/test-results/
+          retention-days: 7

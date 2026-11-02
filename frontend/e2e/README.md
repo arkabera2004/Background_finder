@@ -71,3 +71,12 @@ research pipeline run, genuine persistence. Nothing here is mocked.
   "Completed" and renders a brief, not which synthesis path produced it.
 - PDF export's byte content isn't inspected, only that clicking it is
   wired up without throwing (same standard as Markdown's filename check).
+
+## CI
+
+The unauthenticated suite runs on every push/PR (`.github/workflows/ci.yml`,
+`frontend` job). The authenticated suite has its own job (`e2e-auth`) but
+is **manual-only** — triggered from the Actions tab (`workflow_dispatch`),
+never automatically — because it hits real external APIs (Tavily, Gemini)
+that cost money and take minutes per run. See that job's comments in
+`ci.yml` for the required repo secrets.
