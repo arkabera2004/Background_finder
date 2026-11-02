@@ -42,6 +42,12 @@ jobs:
         with:
           node-version: "22"
       - run: npm ci
+      # tsc needs Next's generated route types (next-env.d.ts /
+      # .next/types), which only exist after `next dev`/`next build` have
+      # run once — absent on a fresh CI checkout, causing a false
+      # "Cannot find name 'LayoutProps'" failure. `next typegen` generates
+      # them without a full build.
+      - run: npx next typegen
       - run: npx tsc --noEmit
       - run: npx eslint src
       - run: npm run build
