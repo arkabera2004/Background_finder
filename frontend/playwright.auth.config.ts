@@ -23,7 +23,10 @@ export default defineConfig({
   testDir: "./e2e/authenticated",
   fullyParallel: false,
   retries: 0,
-  timeout: 180_000, // research submission involves a real Bright Data + AI call
+  // Observed live: a real Gemini synthesis call can take 2-3 minutes
+  // (thinking-model overhead, see backend's ai_brief_synthesizer.py), on
+  // top of the pipeline's other stages — 180s was cutting it close.
+  timeout: 280_000,
   reporter: "list",
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3010",

@@ -22,11 +22,14 @@ test("saving a completed run creates a prospect with working exports", async ({ 
   await page.getByRole("button", { name: "Start Research" }).click();
 
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/, { timeout: 15_000 });
-  await expect(page.getByText("Completed", { exact: true }).first()).toBeVisible({
-    timeout: 170_000,
-  });
+  // Each pipeline step gets its own "Completed" badge well before the run
+  // as a whole is done — "Save to Prospect Library" only renders once
+  // run.status === "completed" && run.brief, so it's the real signal to
+  // wait for, not a step-level text match.
+  const saveButton = page.getByRole("button", { name: "Save to Prospect Library" });
+  await expect(saveButton).toBeVisible({ timeout: 260_000 });
 
-  await page.getByRole("button", { name: "Save to Prospect Library" }).click();
+  await saveButton.click();
   await expect(page).toHaveURL(/\/prospects\/[0-9a-f-]+$/, { timeout: 15_000 });
   await expect(page.getByText(uniqueName).first()).toBeVisible();
 

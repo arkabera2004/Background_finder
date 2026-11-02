@@ -36,10 +36,16 @@ test("submitting pasted profile text runs the pipeline to completion", async ({ 
   // summary should appear immediately, before the run finishes.
   await expect(page.getByText(/^\d+\/\d+ · \d+%$/)).toBeVisible();
 
+  // Each of the 7 pipeline steps gets its own "Completed" badge as it
+  // finishes, long before the run as a whole is done — matching on that
+  // text alone (even .first()) resolves almost immediately and proves
+  // nothing. "Save to Prospect Library" only renders once
+  // run.status === "completed" && run.brief, so it's the real signal.
   // The run completes via the rule-based fallback if no AI provider is
-  // configured/reachable — either way it must reach a terminal state.
-  await expect(page.getByText("Completed", { exact: true }).first()).toBeVisible({
-    timeout: 170_000,
+  // configured/reachable, or via a real (slow) AI call otherwise — either
+  // way it must reach this terminal, brief-rendered state.
+  await expect(page.getByRole("button", { name: "Save to Prospect Library" })).toBeVisible({
+    timeout: 260_000,
   });
   await expect(page.getByText(`Prospect Brief: ${uniqueName}`)).toBeVisible();
   // Section titles render as plain styled <div>s (CardTitle), not <h*>
