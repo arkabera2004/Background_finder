@@ -21,7 +21,11 @@ Monorepo: `backend/` (FastAPI) + `frontend/` (Next.js 15).
 
 ## 3. Current branch and exact HEAD
 
-`main`, commit `0ff806cd650d3d31abaf193360f6001bab610fc9` — local matches `origin/main`.
+`main`, commit `25d5511ded02155d6ffb1c9c322e701cc43cbbea` — local matched `origin/main` at
+handoff-writing time. **This repo's checkout appears to be shared with at least one other
+concurrently-running session** (HEAD moved once already during this handoff's own audit, from
+a commit this session made to one it didn't author) — run `git log -1` and `git fetch && git
+log --oneline origin/main -1` yourself before trusting this SHA.
 
 ## 4. Verified current condition (summary — full detail in PROJECT_CURRENT_STATE.md)
 
@@ -32,13 +36,17 @@ Monorepo: `backend/` (FastAPI) + `frontend/` (Next.js 15).
   every push from `18b32aa` through the second-to-last commit was **red** on a frontend
   `tsc` issue, fixed by the very last commit. Re-run `gh run list --limit 3` before trusting
   "CI is green" as a standing fact.
-- GitHub Actions `e2e-auth` job (manual `workflow_dispatch`, real Supabase+Gemini): login,
-  navigation, and prospect-save steps **pass**; the step that submits a research run and waits
-  for it to reach "Completed" **fails/times out** in both attempts that exist. **This is the
-  most important open problem right now.**
-- Working tree has two pre-existing uncommitted items (a trivial `.gitignore` addition and an
-  untracked, apparently-already-executed plan file) — neither created by this handoff, not
-  urgent, listed in PROJECT_CURRENT_STATE.md §7/§15.
+- GitHub Actions `e2e-auth` job (manual `workflow_dispatch`, real Supabase+Gemini) had, as of
+  the start of this audit, failed on both attempts on record at the step that submits a
+  research run and waits for "Completed." **A fix landed mid-audit** (commit `25d5511`,
+  `fix(e2e): size timeouts to Gemini's actual worst-case retry latency, not a guess` — not
+  authored by this handoff session) raising the completion timeout 260s→420s with a documented
+  Gemini-retry root-cause theory. **Not yet confirmed live** — no `e2e-auth` dispatch run exists
+  on top of this commit yet. **This is the most important open item right now: trigger that
+  run and confirm it actually passes before treating this as resolved.**
+- Working tree has two older, lower-stakes uncommitted items (a trivial `.gitignore` addition
+  and an untracked, apparently-already-executed plan file) — listed in
+  PROJECT_CURRENT_STATE.md §7/§15.
 
 ## 5. What has already been completed (do not redo)
 
@@ -60,24 +68,29 @@ Chronos design tokens, the authenticated E2E suite's setup/navigation/prospect-l
 
 ## 6. Exact next task
 
-**Diagnose why `e2e/authenticated/new-research.spec.ts` times out waiting for the pipeline to
-reach "Completed" against real Supabase + real Gemini in CI.**
+**First: `git log -1` and `git fetch && git log --oneline origin/main -1`** — this checkout
+appeared to be shared with another concurrently-running session during the audit that wrote
+this handoff (HEAD moved mid-audit to a commit this session didn't author). Confirm who/what
+is active before changing anything.
 
-Starting points:
-1. `gh run view <latest e2e-auth run id> --log --job <e2e-auth job id>` to re-read the failure
-   (or re-trigger: `gh workflow run CI` then watch it — this costs real Gemini API usage, so
-   don't loop it blindly).
-2. Download the Playwright trace artifact from that run (`npx playwright show-trace
-   test-results/.../trace.zip`) to see exactly where the UI/backend got stuck.
-3. Likely suspects to check first (not confirmed — investigate, don't assume): the pipeline
-   taking longer than the test's 260s budget on CI's slower runner; an SSE connection issue
-   specific to the CI network environment; a Gemini rate-limit/quota response the pipeline
-   doesn't surface cleanly; the `run_store` in-memory limitation (§9/§16 of
-   PROJECT_CURRENT_STATE.md) causing a mismatch between the worker/API process in a way that
-   doesn't show up in local dev.
-4. If it's a genuine pipeline bug (not a test timing issue), fix it with the project's normal
-   TDD discipline (failing test first, then the fix) — this is real product code, not test
-   flakiness to paper over.
+**Then**: a timeout-increase fix for the `new-research.spec.ts` CI failure was committed
+(`25d5511`, 260s→420s on a Gemini-retry-latency theory) but **has not been confirmed to
+actually work** — no `e2e-auth` dispatch run exists on top of it yet. Your task: trigger that
+run and confirm it passes.
+
+1. `gh workflow run CI` (or find the dispatch option in the Actions tab) — this costs real
+   Gemini/Supabase API usage, so don't loop it blindly; one confirming run is the goal.
+2. `gh run list --limit 3` then `gh run view <id>` to check the `e2e-auth` job's result.
+3. **If it passes**: done — update `PHASE_TRACKER.md`/`KNOWN_LIMITATIONS.md` to say so,
+   honestly ("live-verified" only once you've seen it pass, not before).
+4. **If it still fails**: the timeout increase was a symptom patch, not the root cause. Pull
+   the Playwright trace artifact (`npx playwright show-trace test-results/.../trace.zip`) from
+   the failing run and investigate for real — likely suspects worth checking (not
+   confirmed): an SSE connection issue specific to CI's network environment; a Gemini
+   rate-limit/quota response the pipeline doesn't surface cleanly; the `run_store` in-memory
+   limitation (§9/§16 of PROJECT_CURRENT_STATE.md) causing a worker/API mismatch that doesn't
+   show up in local dev. Fix with the project's normal TDD discipline (failing test first) —
+   this is real product code, not test flakiness to paper over.
 
 ## 7. Remaining phases, in order
 
@@ -170,10 +183,18 @@ run the verification commands in NEW_CHAT_HANDOFF.md §11. Do not trust any
 status claim, including in those four docs, without re-confirming it
 still holds (things change between sessions).
 
-Your next task is exactly: diagnose and fix why
-frontend/e2e/authenticated/new-research.spec.ts times out waiting for a
-real research pipeline run to reach "Completed" against real Supabase +
-real Gemini in CI (see NEW_CHAT_HANDOFF.md §6 for starting points).
+This checkout appeared to be shared with another concurrently-running
+session during the audit that wrote this handoff (HEAD moved mid-audit
+to a commit that session didn't author) — confirm current HEAD and
+whether anyone else is active before changing anything.
+
+Your task is exactly: trigger the e2e-auth GitHub Actions workflow
+dispatch and confirm frontend/e2e/authenticated/new-research.spec.ts now
+passes against real Supabase + real Gemini in CI, following the
+already-committed timeout fix in commit 25d5511. If it still fails,
+diagnose and fix the real root cause (see NEW_CHAT_HANDOFF.md §6 for
+starting points) — the timeout increase alone has not been confirmed to
+work.
 
 Do not reimplement anything already completed (see §5 of the handoff).
 Work autonomously, phase-by-phase, without repeatedly asking for approval

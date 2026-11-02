@@ -264,6 +264,19 @@ view`), which is equally authoritative and avoids spending real API/AI cost redu
   most important, concrete, currently-unresolved finding of this audit**: the real pipeline,
   against real Gemini + real Supabase, is not finishing within the test's timeout (or is
   failing silently before reaching the UI state the test checks for) in the CI environment.
+  **Update, mid-audit**: a fix for exactly this landed and was pushed during this audit
+  session (commit `25d5511`, `fix(e2e): size timeouts to Gemini's actual worst-case retry
+  latency, not a guess` — not authored by this audit's own analysis; found already staged in
+  the shared working tree and committed by a concurrent process/session working on this same
+  checkout). It raises the completion timeout from 260s to 420s (450s overall config timeout)
+  with a documented root-cause theory: `GeminiProvider.complete()` retries up to 3 attempts
+  with its own 120s httpx timeout each, worst case ~363s for one slow-but-not-erroring
+  response — a fast 5xx falls back to rule-based in ~25s and was never the problem.
+  **This audit did not author or test that fix and has not seen a subsequent `e2e-auth` CI
+  run confirm it actually resolves the timeout** (no dispatch run exists yet on top of
+  `25d5511` as of this writing) — treat it as "a plausible, committed fix awaiting its first
+  live confirmation," not as "resolved." Trigger `gh workflow run CI` and check the result
+  before assuming this is done.
 - **No actual deployment exists anywhere** — no Railway/Render/Fly/Vercel account, confirmed
   by `docs/DECISION_LOG.md` and re-confirmed by the absence of any deployment-specific
   secrets, URLs, or `gh` deployment records found in this audit. `docs/DEPLOYMENT.md`
@@ -286,22 +299,29 @@ view`), which is equally authoritative and avoids spending real API/AI cost redu
 **CI-only secrets** (GitHub Actions repo secrets, confirmed present, values not inspected):
 `E2E_EMAIL`, `E2E_PASSWORD`.
 
-## 15. Git status and latest commit (verified at audit time)
+## 15. Git status and latest commit (verified at audit time — note this moved mid-audit)
 
 - Branch: `main`. Local HEAD **matches** `origin/main`.
-- HEAD: `0ff806cd650d3d31abaf193360f6001bab610fc9` —
-  `fix(ci): generate Next.js route types before tsc, fixing a real CI failure` (2026-11-02
-  20:22:03 +0530).
+- HEAD at the start of this audit: `0ff806cd650d3d31abaf193360f6001bab610fc9` (the CI typegen
+  fix). **HEAD moved during this audit**, by a commit this audit did not author, to
+  `25d5511ded02155d6ffb1c9c322e701cc43cbbea` —
+  `fix(e2e): size timeouts to Gemini's actual worst-case retry latency, not a guess`
+  (2026-11-02 23:01:20 +0530) — see §13's updated note. This repository checkout appears to
+  be shared with at least one other concurrently-running session; **always re-run `git log -1`
+  and `git fetch && git log --oneline origin/main -1` yourself before trusting any commit SHA
+  named in this document**, including this one.
 - Working tree: **not clean** — one modified-but-uncommitted file (`.gitignore`, adds
   `.worktrees/`) and one untracked file (the plan doc in §7 item 7). Both pre-date this audit;
-  neither was created by it.
+  neither was created by it, and neither was touched by the concurrent commit either.
 - Remote: `origin` → `https://github.com/arkabera2004/Background_finder.git` (fetch+push).
 
 ## 16. Prioritized remaining work
 
-1. **Diagnose and fix the authenticated E2E pipeline-completion failure** (§5, §13) — this is
-   the one concrete, currently-failing, real-infrastructure test blocking confidence in the
-   live path. Start with the trace artifact from the failing CI run.
+1. **Verify the just-committed E2E timeout fix actually works** (§5, §13) — trigger the
+   `e2e-auth` workflow dispatch and confirm `new-research.spec.ts` passes against real infra
+   before treating this as resolved. If it still fails, the timeout increase was a symptom
+   patch, not a root-cause fix, and the real investigation (SSE handling, Gemini quota
+   behavior under CI's network conditions, etc.) still needs to happen.
 2. **Decide the fate of the three dead config surfaces** (Exa/Brave search, Jina extraction) —
    either implement them or remove them from `.env.example`/settings so they stop looking
    wired-up when they aren't.
