@@ -6,6 +6,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
 from app.db.models import Base
+from app.db import chanakya_models  # noqa: F401 - registers Chanakya tables with Base.metadata
 
 
 def make_engine(database_url: str | None = None):

@@ -1,0 +1,119 @@
+import pytest
+from sqlalchemy.orm import sessionmaker
+
+import app.db.chanakya_models  # noqa: F401 - registers tables with Base.metadata
+from app.db.chanakya_repository import ChanakyaRunRepository
+from app.db.session import init_db, make_engine
+from app.schemas.chanakya import AgentExecutionStatus, AgentName, RunStatus
+
+
+@pytest.fixture
+def session():
+    engine = make_engine("sqlite:///:memory:")
+    init_db(bind=engine)
+    SessionLocal = sessionmaker(bind=engine)
+    s = SessionLocal()
+    yield s
+    s.close()
+
+
+def test_create_run_seeds_one_execution_row_per_agent(session):
+    repo = ChanakyaRunRepository(session)
+    run = repo.create_run("user-1", "2026-11")
+
+    assert run.status == RunStatus.PENDING.value
+    assert len(run.agent_executions) == len(list(AgentName))
+    assert {e.agent_name for e in run.agent_executions} == {a.value for a in AgentName}
+    assert all(e.status == AgentExecutionStatus.PENDING.value for e in run.agent_executions)
+
+
+def test_get_and_list_are_owner_scoped(session):
+    repo = ChanakyaRunRepository(session)
+    run = repo.create_run("user-a", "2026-11")
+    repo.create_run("user-b", "2026-11")
+
+    assert repo.get(run.id, owner_id="user-a") is not None
+    assert repo.get(run.id, owner_id="user-b") is None
+    assert len(repo.list_for_owner("user-a")) == 1
+
+
+def test_offering_snapshots_are_versioned_and_append_only(session):
+    repo = ChanakyaRunRepository(session)
+    run = repo.create_run("user-a", "2026-11")
+
+    s1 = repo.add_offering_snapshot(run, {"offerings": ["accelerator-a"]})
+    s2 = repo.add_offering_snapshot(run, {"offerings": ["accelerator-a", "accelerator-b"]})
+
+    assert s1.version == 1
+    assert s2.version == 2
+    # the first snapshot is untouched by the second write
+    assert s1.data == {"offerings": ["accelerator-a"]}
+
+
+def test_agent_lifecycle_start_complete_fail(session):
+    repo = ChanakyaRunRepository(session)
+    run = repo.create_run("user-a", "2026-11")
+
+    started = repo.start_agent(run.id, AgentName.COMPANY_SCOUT)
+    assert started.status == AgentExecutionStatus.RUNNING.value
+    assert started.started_at is not None
+
+    completed = repo.complete_agent(run.id, AgentName.COMPANY_SCOUT, {"companies_found": 100})
+    assert completed.status == AgentExecutionStatus.COMPLETED.value
+    assert completed.output_summary == {"companies_found": 100}
+    assert completed.completed_at is not None
+
+    failed = repo.fail_agent(run.id, AgentName.EMAIL_HUNTER, "provider timeout")
+    assert failed.status == AgentExecutionStatus.FAILED.value
+    assert failed.retry_count == 1
+    assert failed.error == "provider timeout"
+
+
+def test_start_agent_is_idempotent_once_completed():
+    """A resumed/retried run must not redo a stage that already finished."""
+    engine = make_engine("sqlite:///:memory:")
+    init_db(bind=engine)
+    session = sessionmaker(bind=engine)()
+    repo = ChanakyaRunRepository(session)
+    run = repo.create_run("user-a", "2026-11")
+
+    repo.start_agent(run.id, AgentName.CATALOGUE)
+    completed = repo.complete_agent(run.id, AgentName.CATALOGUE, {"offerings": 3})
+
+    # Re-starting the same agent after completion must not reset its output/status.
+    re_started = repo.start_agent(run.id, AgentName.CATALOGUE)
+    assert re_started.status == AgentExecutionStatus.COMPLETED.value
+    assert re_started.output_summary == {"offerings": 3}
+    assert re_started.id == completed.id
+    session.close()
+
+
+def test_evidence_records_provenance_per_entity(session):
+    repo = ChanakyaRunRepository(session)
+    run = repo.create_run("user-a", "2026-11")
+
+    repo.add_evidence(
+        run.id,
+        AgentName.COMPANY_SCOUT,
+        entity_type="company",
+        entity_id="company-123",
+        source_url="https://example.com/about",
+        confidence=0.9,
+        excerpt="Acme Corp is a 500-person fintech company.",
+    )
+
+    rows = run.evidence
+    assert len(rows) == 1
+    assert rows[0].entity_type == "company"
+    assert rows[0].entity_id == "company-123"
+    assert rows[0].confidence == 0.9
+
+
+def test_mark_run_status_sets_completed_at(session):
+    repo = ChanakyaRunRepository(session)
+    run = repo.create_run("user-a", "2026-11")
+
+    repo.mark_run_status(run, RunStatus.COMPLETED)
+
+    assert run.status == RunStatus.COMPLETED.value
+    assert run.completed_at is not None

@@ -84,3 +84,54 @@ picks this up.
 ## What's still NOT_STARTED
 
 Real Postgres-backed Run storage (the reason retention isn't effective yet), cost tracking dashboards, audit logging, input sanitization for crawled/uploaded content, CORS lockdown beyond localhost, secret rotation, Exa/Brave search, Jina extraction, and all actual deployment (no Supabase/Railway/Vercel account exists). See `docs/KNOWN_LIMITATIONS.md` and `docs/PROJECT_CURRENT_STATE.md`.
+
+## Chanakya Phase 0 — Gap analysis
+
+See `docs/CHANAKYA_GAP_ANALYSIS.md` (`8b54df4`). Scoped Chanakya (monthly
+seven-agent GTM engine) as an additive expansion on top of ProspectLens,
+reusing its auth/DB/provider/pipeline/citation-validation/export
+primitives rather than rewriting them.
+
+## Chanakya Phase 1 — Domain foundation (run lifecycle + provenance)
+
+New, additive module `app/db/chanakya_models.py` (registers alongside
+`app/db/models.py` via `app/db/session.py`), separate from ProspectLens's
+single-prospect schema:
+
+- `MonthlyRun` — one row per owner per period (e.g. "2026-11"), `status`
+  (`pending`/`running`/`completed`/`failed`/`cancelled`), free-form `config`
+  JSON for target counts/limits/provider choices set in later phases.
+- `OfferingSnapshot` — Agent 01's versioned, append-only offering/ICP brief;
+  editing offerings creates a new version rather than mutating history, so
+  a completed run always points at the exact brief it ran against.
+- `AgentExecution` — one row per agent per run (seeded automatically for
+  all seven `AgentName` values on `create_run`), tracking status, retry
+  count, error, and an output summary. `start_agent()` is idempotent: if
+  the stage is already `COMPLETED` it returns the existing record instead
+  of resetting it, so a resumed run never redoes finished work (this is
+  the data-layer half of the Phase 9 "restartable and idempotent" monthly
+  run requirement — no queue/scheduler yet, that's Phase 9).
+- `Evidence` — generic provenance table (`entity_type`/`entity_id`/
+  `source_url`/`confidence`/`excerpt`) every later agent (company scout,
+  people finder, resolver, email hunter, profile researcher) can attach
+  sourcing to from day one, instead of each agent inventing its own
+  evidence table per phase.
+- `app/schemas/chanakya.py`: `AgentName`, `RunStatus`, `AgentExecutionStatus`
+  enums shared by the models, repository, and every later agent.
+- `app/db/chanakya_repository.py`: `ChanakyaRunRepository` — owner-scoped
+  `create_run`/`get`/`list_for_owner`, `add_offering_snapshot`,
+  `start_agent`/`complete_agent`/`fail_agent`, `add_evidence`,
+  `mark_run_status`.
+- `migrations/0002_chanakya_phase1.sql`: Postgres/Supabase mirror of the
+  above with RLS owner policies, additive to `0001_init.sql`.
+
+No API routes or frontend yet — this phase is the shared foundation
+Phases 2-8 (the seven agents) build their tables and stages on top of.
+
+Tests: 7 new tests in `app/tests/test_chanakya_run_lifecycle.py` (seed-on-
+create, owner scoping, snapshot versioning/append-only, agent
+start/complete/fail lifecycle, start-after-complete idempotency, evidence
+provenance, run status transitions). Full backend suite: **290 passed**
+(up from 283). `ruff check app` → 0 errors. `mypy app main.py
+--ignore-missing-imports` → 0 errors. All of this is local SQLite-backed;
+none of it has run against a real Supabase/Postgres instance.
