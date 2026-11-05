@@ -61,3 +61,38 @@ def test_default_days_comes_from_settings(monkeypatch):
     deleted = purge_expired_runs(store)  # no explicit days passed
 
     assert deleted == 1
+
+
+def test_chanakya_retention_sweep_purges_old_runs(monkeypatch):
+    from sqlalchemy.orm import sessionmaker
+
+    from app.db.chanakya_repository import ChanakyaRunRepository
+    from app.db.session import init_db, make_engine
+
+    engine = make_engine("sqlite:///:memory:")
+    init_db(bind=engine)
+    session = sessionmaker(bind=engine)()
+    repo = ChanakyaRunRepository(session)
+    old_run = repo.create_run("user-1", "2026-01")
+    old_run.created_at = datetime.now(timezone.utc) - timedelta(days=100)
+    recent_run = repo.create_run("user-1", "2026-11")
+    session.commit()
+
+    monkeypatch.setattr("app.db.session.get_session", lambda: session)
+
+    import importlib
+
+    workers_main = importlib.import_module("app.workers.main")
+    monkeypatch.setattr(workers_main, "get_session", lambda: session)
+
+    import asyncio
+
+    old_run_id, recent_run_id = old_run.id, recent_run.id
+    result = asyncio.run(workers_main.run_retention_sweep(ctx={}))
+
+    verify_session = sessionmaker(bind=engine)()
+    verify_repo = ChanakyaRunRepository(verify_session)
+    assert result["chanakya_deleted"] == 1
+    assert verify_repo.get(old_run_id, "user-1") is None
+    assert verify_repo.get(recent_run_id, "user-1") is not None
+    verify_session.close()

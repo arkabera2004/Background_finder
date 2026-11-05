@@ -325,6 +325,46 @@ def test_get_qa_record_and_set_approval(session):
     assert record.approval_status == "rejected"
 
 
+def test_count_recent_runs_for_owner_only_counts_within_window(session):
+    from datetime import datetime, timedelta, timezone
+
+    repo = ChanakyaRunRepository(session)
+    recent = repo.create_run("user-a", "2026-11")
+    old = repo.create_run("user-a", "2026-10")
+    old.created_at = datetime.now(timezone.utc) - timedelta(days=2)
+    session.commit()
+    repo.create_run("user-b", "2026-11")  # different owner, shouldn't count
+
+    since = datetime.now(timezone.utc) - timedelta(days=1)
+    count = repo.count_recent_runs_for_owner("user-a", since)
+
+    assert count == 1
+    assert recent.id != old.id  # sanity: both rows exist, only one counted
+
+
+def test_purge_expired_runs_deletes_old_runs_and_cascades(session):
+    from datetime import datetime, timedelta, timezone
+
+    repo = ChanakyaRunRepository(session)
+    old_run = repo.create_run("user-a", "2026-01")
+    old_run.created_at = datetime.now(timezone.utc) - timedelta(days=100)
+    [company] = repo.upsert_scouted_companies(
+        old_run.id,
+        "user-a",
+        [{"name": "Acme", "domain": "acme.com", "source_url": "https://acme.com", "fit_score": 1.0}],
+    )
+    recent_run = repo.create_run("user-a", "2026-11")
+    session.commit()
+
+    deleted = repo.purge_expired_runs(days=90)
+
+    assert deleted == 1
+    assert repo.get(old_run.id, "user-a") is None
+    assert repo.get(recent_run.id, "user-a") is not None
+    # cascade deleted the company under the purged run
+    assert session.query(type(company)).filter_by(id=company.id).one_or_none() is None
+
+
 def test_mark_run_status_sets_completed_at(session):
     repo = ChanakyaRunRepository(session)
     run = repo.create_run("user-a", "2026-11")

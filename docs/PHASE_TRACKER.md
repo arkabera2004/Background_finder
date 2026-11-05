@@ -482,3 +482,47 @@ Finder/LinkedIn Resolver manual-review-queue UI (the backend endpoint
 exists; this page doesn't call it yet), no provider-health/cost
 dashboard, no run-history/audit-trail view, and no Playwright E2E
 coverage for any of these new pages. These remain open Phase 10 work.
+
+## Chanakya Phase 11 (partial) — Security and privacy hardening
+
+- **Rate limiting**: `POST /chanakya/runs` now enforces
+  `settings.max_chanakya_runs_per_user_per_day` (default 5 — a monthly
+  batch run is a much heavier operation than a single research run, so
+  the default is deliberately far lower than ProspectLens's 30/day),
+  429 on breach, scoped per owner via
+  `ChanakyaRunRepository.count_recent_runs_for_owner()`.
+  `MAX_CHANAKYA_RUNS_PER_USER_PER_DAY` added to `.env.example`.
+- **Retention**: `ChanakyaRunRepository.purge_expired_runs(days)`
+  deletes `MonthlyRun` rows past `default_retention_days` (same setting
+  ProspectLens's Run retention already uses) — cascade delete takes
+  every offering snapshot, company, person, email candidate, research
+  brief, and QA record underneath. Wired into the existing daily ARQ
+  cron (`app/workers/main.py:run_retention_sweep`) alongside the
+  pre-existing single-prospect Run purge, so there's one cron, two
+  purges, one combined `{"deleted", "chanakya_deleted"}` result.
+- **Tenant isolation, made explicit and regression-proof**: new
+  `test_chanakya_tenant_isolation.py` — 18 parametrized tests proving
+  every GET (`offerings`, `companies`, `people`, `people/needs-review`,
+  `emails`, `briefs`, `qa`, `export`) and every POST action (every
+  agent trigger, `orchestrate`, manual `resolve`, manual `approve`) 404s
+  for a different owner, plus a direct check that `GET /chanakya/runs`
+  never lists another owner's runs. This was already true by
+  construction (every handler calls `get_run_or_404` with the
+  requester's `owner_id` before touching anything), but it was
+  previously an assumption, not a tested guarantee — now it is.
+
+Tests: 2 repository-level (recent-run counting windowed by owner,
+purge-with-cascade) + 2 API-level (rate limit breach + per-owner
+isolation of the limit) + 1 worker-level (retention sweep purges an old
+Chanakya run, keeps a recent one) + 18 tenant-isolation tests. Full
+backend suite: **375 passed** (up from 353). `ruff`/`mypy` both 0
+errors.
+
+**Still open from the master prompt's security section**: input
+sanitization/prompt-injection protection specifically for Chanakya's
+scraped content (this reuses ProspectLens's existing pipeline/citation
+validator, not independently re-audited for the batch context), audit
+logging of sensitive actions (approvals aren't logged anywhere beyond
+the QA record's own `approval_status`), secret rotation, and a
+documented data-retention/deletion *policy* beyond the mechanical purge
+implemented here. Not claimed as done.

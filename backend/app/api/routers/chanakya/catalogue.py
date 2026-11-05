@@ -1,9 +1,12 @@
 """Agent 01 — Catalogue: monthly run lifecycle + offering/ICP intake."""
 
-from fastapi import APIRouter, Depends
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.routers.chanakya.shared import get_run_or_404, run_to_dict, snapshot_to_dict
 from app.core.auth import AuthenticatedUser, get_current_user
+from app.core.config import settings
 from app.db.chanakya_repository import ChanakyaRunRepository
 from app.db.session import get_session
 from app.schemas.catalogue import MonthlyRunCreate, OfferingBriefInput
@@ -19,6 +22,12 @@ async def create_run(
     session = get_session()
     try:
         repo = ChanakyaRunRepository(session)
+        since = datetime.now(timezone.utc) - timedelta(days=1)
+        if repo.count_recent_runs_for_owner(user.user_id, since) >= settings.max_chanakya_runs_per_user_per_day:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Daily limit of {settings.max_chanakya_runs_per_user_per_day} Chanakya runs exceeded",
+            )
         run = repo.create_run(user.user_id, payload.period, payload.config)
         return run_to_dict(run)
     finally:

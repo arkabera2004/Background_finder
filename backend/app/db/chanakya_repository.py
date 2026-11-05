@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
@@ -28,6 +28,26 @@ class ChanakyaRunRepository:
             self.session.add(AgentExecution(run_id=run.id, agent_name=agent.value))
         self.session.commit()
         return run
+
+    def count_recent_runs_for_owner(self, owner_id: str, since: datetime) -> int:
+        return (
+            self.session.query(MonthlyRun)
+            .filter(MonthlyRun.owner_id == owner_id, MonthlyRun.created_at >= since)
+            .count()
+        )
+
+    def purge_expired_runs(self, days: int) -> int:
+        """Deletes MonthlyRuns (and, via cascade, every stage/company/person/
+        email/brief/QA record under them) older than `days`. Mirrors
+        ProspectLens's purge_expired_runs for the single-prospect Run —
+        same retention policy, applied to the Chanakya schema."""
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        expired = self.session.query(MonthlyRun).filter(MonthlyRun.created_at < cutoff).all()
+        count = len(expired)
+        for run in expired:
+            self.session.delete(run)
+        self.session.commit()
+        return count
 
     def get(self, run_id: str, owner_id: str) -> MonthlyRun | None:
         return (

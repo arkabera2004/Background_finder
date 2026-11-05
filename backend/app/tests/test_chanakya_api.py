@@ -51,6 +51,21 @@ def test_create_run_seeds_pending_agent_executions():
     assert all(e["status"] == "pending" for e in body["agent_executions"])
 
 
+def test_create_run_rate_limited_per_owner_per_day(monkeypatch):
+    monkeypatch.setattr(settings, "max_chanakya_runs_per_user_per_day", 2)
+    headers = _auth_header()
+
+    client.post("/chanakya/runs", json={"period": "2026-11"}, headers=headers)
+    client.post("/chanakya/runs", json={"period": "2026-11"}, headers=headers)
+    response = client.post("/chanakya/runs", json={"period": "2026-11"}, headers=headers)
+
+    assert response.status_code == 429
+
+    # a different owner is unaffected by the first owner's limit
+    other = client.post("/chanakya/runs", json={"period": "2026-11"}, headers=_auth_header("owner-b"))
+    assert other.status_code == 201
+
+
 def test_create_run_rejects_bad_period():
     response = client.post("/chanakya/runs", json={"period": "november"}, headers=_auth_header())
 

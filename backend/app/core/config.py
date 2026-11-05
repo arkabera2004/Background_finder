@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     max_concurrent_runs_per_user: int = 3
     default_retention_days: int = 90
 
+    # Chanakya monthly runs are a heavier, batch operation than a single
+    # research run — a much lower daily ceiling is the sane default.
+    max_chanakya_runs_per_user_per_day: int = 5
+
     database_url: str = "sqlite:///./prospectlens.db"  # local path until Supabase Postgres is configured
 
     cors_origins: list[str] = ["http://localhost:3000"]
