@@ -60,6 +60,7 @@ class MonthlyRun(Base):
     research_briefs: Mapped[list["ResearchBrief"]] = relationship(
         back_populates="run", cascade="all, delete-orphan"
     )
+    qa_records: Mapped[list["QARecord"]] = relationship(back_populates="run", cascade="all, delete-orphan")
 
     __table_args__ = (Index("ix_chanakya_runs_owner_period", "owner_id", "period"),)
 
@@ -254,3 +255,33 @@ class ResearchBrief(Base):
     person: Mapped[Person] = relationship()
 
     __table_args__ = (Index("ix_research_briefs_run_person", "run_id", "person_id", unique=True),)
+
+
+class QARecord(Base):
+    """Agent 07's output: confidence score, review routing, and draft
+    email for a person. `approval_status` starts "pending_review" and
+    only a human (via the manual approve/reject endpoint) can move it to
+    "approved" — nothing in this codebase sends an email on its own."""
+
+    __tablename__ = "chanakya_qa_records"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    owner_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    run_id: Mapped[str] = mapped_column(
+        String, ForeignKey("chanakya_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    person_id: Mapped[str] = mapped_column(
+        String, ForeignKey("chanakya_people.id", ondelete="CASCADE"), nullable=False
+    )
+    confidence_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    confidence_level: Mapped[str] = mapped_column(String, nullable=False)
+    needs_review: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    draft_subject: Mapped[str] = mapped_column(String, nullable=False)
+    draft_body: Mapped[str] = mapped_column(Text, nullable=False)
+    approval_status: Mapped[str] = mapped_column(String, default="pending_review", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    run: Mapped[MonthlyRun] = relationship(back_populates="qa_records")
+    person: Mapped[Person] = relationship()
+
+    __table_args__ = (Index("ix_qa_records_run_person", "run_id", "person_id", unique=True),)

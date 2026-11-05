@@ -284,6 +284,47 @@ def test_upsert_research_brief_replaces_on_rerun(session):
     assert len(repo.list_research_briefs(run.id, person_id=person.id)) == 1
 
 
+def test_upsert_qa_record_replaces_scoring_without_resetting_approval(session):
+    repo = ChanakyaRunRepository(session)
+    run = repo.create_run("user-a", "2026-11")
+    [company] = repo.upsert_scouted_companies(
+        run.id, "user-a", [{"name": "Acme", "domain": "acme.com", "source_url": "https://acme.com", "fit_score": 1.0}]
+    )
+    [person] = repo.upsert_people(
+        run.id, "user-a", company.id, [{"full_name": "Jane Doe", "role": "CEO", "linkedin_url": None, "confidence": 0.5}]
+    )
+
+    record = repo.upsert_qa_record(run.id, "user-a", person.id, 1.0, "low", True, "Subject", "Body")
+    repo.set_qa_approval(record, True)
+
+    updated = repo.upsert_qa_record(run.id, "user-a", person.id, 3.0, "high", False, "New Subject", "New Body")
+
+    assert updated.confidence_level == "high"
+    assert updated.draft_subject == "New Subject"
+    assert updated.approval_status == "approved"  # not reset by the re-score
+    assert len(repo.list_qa_records(run.id)) == 1
+    assert repo.list_qa_records(run.id, needs_review_only=True) == []
+
+
+def test_get_qa_record_and_set_approval(session):
+    repo = ChanakyaRunRepository(session)
+    run = repo.create_run("user-a", "2026-11")
+    [company] = repo.upsert_scouted_companies(
+        run.id, "user-a", [{"name": "Acme", "domain": "acme.com", "source_url": "https://acme.com", "fit_score": 1.0}]
+    )
+    [person] = repo.upsert_people(
+        run.id, "user-a", company.id, [{"full_name": "Jane Doe", "role": "CEO", "linkedin_url": None, "confidence": 0.5}]
+    )
+    repo.upsert_qa_record(run.id, "user-a", person.id, 1.0, "low", True, "Subject", "Body")
+
+    record = repo.get_qa_record(run.id, person.id)
+    assert record is not None
+    assert record.approval_status == "pending_review"
+
+    repo.set_qa_approval(record, False)
+    assert record.approval_status == "rejected"
+
+
 def test_mark_run_status_sets_completed_at(session):
     repo = ChanakyaRunRepository(session)
     run = repo.create_run("user-a", "2026-11")

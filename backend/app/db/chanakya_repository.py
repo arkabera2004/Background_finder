@@ -9,6 +9,7 @@ from app.db.chanakya_models import (
     MonthlyRun,
     OfferingSnapshot,
     Person,
+    QARecord,
     ResearchBrief,
     ScoutedCompany,
 )
@@ -300,6 +301,65 @@ class ChanakyaRunRepository:
         if person_id:
             query = query.filter(ResearchBrief.person_id == person_id)
         return query.order_by(ResearchBrief.created_at.desc()).all()
+
+    def upsert_qa_record(
+        self,
+        run_id: str,
+        owner_id: str,
+        person_id: str,
+        confidence_score: float,
+        confidence_level: str,
+        needs_review: bool,
+        draft_subject: str,
+        draft_body: str,
+    ) -> QARecord:
+        """Dedup by (run_id, person_id): re-running QA replaces the score
+        and draft but never resets an existing human approval decision."""
+        existing = (
+            self.session.query(QARecord)
+            .filter(QARecord.run_id == run_id, QARecord.person_id == person_id)
+            .one_or_none()
+        )
+        if existing:
+            existing.confidence_score = confidence_score
+            existing.confidence_level = confidence_level
+            existing.needs_review = needs_review
+            existing.draft_subject = draft_subject
+            existing.draft_body = draft_body
+            self.session.commit()
+            return existing
+
+        record = QARecord(
+            owner_id=owner_id,
+            run_id=run_id,
+            person_id=person_id,
+            confidence_score=confidence_score,
+            confidence_level=confidence_level,
+            needs_review=needs_review,
+            draft_subject=draft_subject,
+            draft_body=draft_body,
+        )
+        self.session.add(record)
+        self.session.commit()
+        return record
+
+    def list_qa_records(self, run_id: str, needs_review_only: bool = False) -> list[QARecord]:
+        query = self.session.query(QARecord).filter(QARecord.run_id == run_id)
+        if needs_review_only:
+            query = query.filter(QARecord.needs_review.is_(True))
+        return query.order_by(QARecord.confidence_score.desc()).all()
+
+    def get_qa_record(self, run_id: str, person_id: str) -> QARecord | None:
+        return (
+            self.session.query(QARecord)
+            .filter(QARecord.run_id == run_id, QARecord.person_id == person_id)
+            .one_or_none()
+        )
+
+    def set_qa_approval(self, record: QARecord, approved: bool) -> QARecord:
+        record.approval_status = "approved" if approved else "rejected"
+        self.session.commit()
+        return record
 
     def mark_run_status(self, run: MonthlyRun, status: RunStatus) -> MonthlyRun:
         run.status = status.value

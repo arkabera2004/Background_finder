@@ -12,6 +12,7 @@ from app.db.chanakya_models import (
     MonthlyRun,
     OfferingSnapshot,
     Person,
+    QARecord,
     ResearchBrief,
     ScoutedCompany,
 )
@@ -93,6 +94,21 @@ def research_brief_to_dict(brief: ResearchBrief) -> dict:
         "status": brief.status,
         "data": brief.data,
         "created_at": brief.created_at.isoformat(),
+    }
+
+
+def qa_record_to_dict(record: QARecord) -> dict:
+    return {
+        "id": record.id,
+        "run_id": record.run_id,
+        "person_id": record.person_id,
+        "confidence_score": record.confidence_score,
+        "confidence_level": record.confidence_level,
+        "needs_review": record.needs_review,
+        "draft_subject": record.draft_subject,
+        "draft_body": record.draft_body,
+        "approval_status": record.approval_status,
+        "created_at": record.created_at.isoformat(),
     }
 
 

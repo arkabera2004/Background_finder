@@ -127,6 +127,21 @@ create table if not exists chanakya_research_briefs (
     unique (run_id, person_id)
 );
 
+create table if not exists chanakya_qa_records (
+    id uuid primary key default gen_random_uuid(),
+    owner_id uuid not null references auth.users(id) on delete cascade,
+    run_id uuid not null references chanakya_runs(id) on delete cascade,
+    person_id uuid not null references chanakya_people(id) on delete cascade,
+    confidence_score double precision not null default 0,
+    confidence_level text not null,
+    needs_review boolean not null default true,
+    draft_subject text not null,
+    draft_body text not null,
+    approval_status text not null default 'pending_review',
+    created_at timestamptz not null default now(),
+    unique (run_id, person_id)
+);
+
 alter table chanakya_scouted_companies enable row level security;
 alter table chanakya_people enable row level security;
 
@@ -143,3 +158,7 @@ create policy owner_all on chanakya_email_candidates for all using (owner_id = a
 alter table chanakya_research_briefs enable row level security;
 create policy owner_select on chanakya_research_briefs for select using (owner_id = auth.uid());
 create policy owner_all on chanakya_research_briefs for all using (owner_id = auth.uid());
+
+alter table chanakya_qa_records enable row level security;
+create policy owner_select on chanakya_qa_records for select using (owner_id = auth.uid());
+create policy owner_all on chanakya_qa_records for all using (owner_id = auth.uid());

@@ -368,3 +368,53 @@ status the real pipeline returns under test's null/rule-based providers)
 confirmed people, full chain through all four prior agents producing one
 brief per confirmed person, person-filtered list). Full backend suite:
 **339 passed** (up from 334). `ruff`/`mypy` both 0 errors.
+
+## Chanakya Phase 8 — QA and Sync (Agent 07) — all 7 agents now implemented
+
+- `app/services/qa_sync.py`: `score_confidence()` combines three signals
+  already produced by earlier agents (identity confirmation, best email
+  verification status, research brief completion) into a 0-3 score and
+  a high/medium/low level — never invents a fourth signal. `draft_email()`
+  builds a subject/body strictly from the brief's own
+  `outreach_strategy`/`personalization_hooks` content, falling back to a
+  generic (not fabricated) opening when a brief has neither.
+- New `QARecord` table (`chanakya_qa_records`, unique on
+  `(run_id, person_id)`), `approval_status` starting `"pending_review"`.
+  Repository: `upsert_qa_record()` (replaces scoring/draft on re-run,
+  **never resets an existing human approval decision**),
+  `list_qa_records()` (optional needs-review filter), `get_qa_record()`,
+  `set_qa_approval()`.
+- `POST /chanakya/runs/{id}/qa-sync`: scores + drafts every person on the
+  run (409 if Profile Researcher hasn't produced a brief yet).
+- `GET /chanakya/runs/{id}/qa?needs_review_only=` — review queue.
+- `POST /chanakya/runs/{id}/qa/{person_id}/approve`: the human approval
+  gate the master prompt requires before any send — and this codebase
+  has **no email-sending integration at all** (no Outlook/Graph wiring
+  exists yet), so "approved" only ever records a decision; nothing here
+  sends anything. That absence is the honest, correct state, not a
+  shortcut being hidden.
+- `GET /chanakya/runs/{id}/export?format=json|csv`: joins QA + person +
+  company into export rows (stdlib `csv`, no new dependency); Excel
+  (.xlsx) export is not implemented (CSV covers the same data; the
+  remaining gap toward the master prompt's "Export center" Excel
+  requirement is documented, not claimed done).
+
+Tests: 5 service-level (score levels incl. high/medium/low, draft with a
+real hook vs. the generic fallback) + 2 repository-level (replace-
+without-resetting-approval, get+approve) + 3 API-level (409 before
+briefs exist, full seven-agent chain → score → draft → approve → JSON
+and CSV export, 404 for an unknown person). Full backend suite:
+**349 passed** (up from 339). `ruff`/`mypy` both 0 errors.
+
+**All seven agents from the master prompt (Catalogue, Company Scout,
+People Finder, LinkedIn Resolver, Email Hunter, Profile Researcher, QA
+and Sync) now exist as independently testable stages with their own
+service/router/schema files, chained end-to-end and covered by
+fixture-based tests from run creation through export.** Remaining work
+per the master prompt: Phase 9 (queue-based orchestration/scheduling —
+today each agent is called by its own explicit API route; there is no
+automatic monthly trigger or Service-Bus-style queue yet), Phase 10
+(frontend dashboard — none of this has any UI), Phase 11 (security/
+privacy hardening beyond existing auth+tenant isolation), Phase 12
+(broader test/eval coverage), Phase 13 (Azure deployment), Phase 14
+(final acceptance). None of these are claimed done.
