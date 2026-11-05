@@ -13,6 +13,7 @@ from app.api.routers.chanakya import (
     company_scout,
     email_hunter,
     linkedin_resolver,
+    orchestrator,
     people_finder,
     profile_researcher,
     qa_sync,
@@ -26,3 +27,4 @@ router.include_router(linkedin_resolver.router)
 router.include_router(email_hunter.router)
 router.include_router(profile_researcher.router)
 router.include_router(qa_sync.router)
+router.include_router(orchestrator.router)

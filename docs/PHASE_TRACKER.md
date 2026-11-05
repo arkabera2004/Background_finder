@@ -418,3 +418,34 @@ automatic monthly trigger or Service-Bus-style queue yet), Phase 10
 privacy hardening beyond existing auth+tenant isolation), Phase 12
 (broader test/eval coverage), Phase 13 (Azure deployment), Phase 14
 (final acceptance). None of these are claimed done.
+
+## Chanakya Phase 9 (partial) — Orchestration: sequential, resumable run
+
+- `app/api/routers/chanakya/orchestrator.py`: `POST
+  /chanakya/runs/{id}/orchestrate` calls Agents 02-07 (Company Scout
+  through QA/Sync) in order by calling each one's existing route
+  function directly — no logic duplicated. Agent 01 (Catalogue) is
+  deliberately excluded: submitting the offering/ICP brief is a human
+  review step per the master prompt's workflow step 2, not something to
+  auto-trigger.
+- **Resumable without a queue**: before calling each stage, the
+  orchestrator checks that stage's `AgentExecution.status` — if already
+  `"completed"` it's skipped (`"skipped_already_completed"`) rather than
+  redone. This works because every agent's persistence from Phase 1
+  onward was already built idempotent (`upsert_*` by a unique key); the
+  orchestrator adds the "don't even call it again" layer on top of that.
+  On a stage failure (any `HTTPException` the stage's handler raises),
+  the orchestrator stops immediately and reports `stopped_at` — calling
+  `/orchestrate` again resumes at exactly that stage.
+- **Still a gap, not claimed as done**: this is one synchronous HTTP
+  endpoint, not Azure Service Bus / Container Apps Jobs / a Redis queue.
+  There is no automatic monthly cron trigger, no per-stage worker
+  process, and no cross-request retry backoff — those remain open Phase
+  9 work toward the master prompt's full orchestration architecture.
+
+Tests: 4 API-level (`test_orchestrator_api.py`: 404 for an unknown run,
+stopping at Company Scout when no offering brief was submitted, a full
+six-stage run to completion, and idempotent re-run — all
+`skipped_already_completed`, no duplicate companies/people created).
+Full backend suite: **353 passed** (up from 349). `ruff`/`mypy` both
+0 errors.
