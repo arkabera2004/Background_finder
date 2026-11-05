@@ -24,9 +24,10 @@ def _isolated_db(monkeypatch):
     init_db(bind=_test_engine)
     _test_session_factory = sessionmaker(bind=_test_engine)
 
-    import app.api.routers.chanakya as chanakya_router
+    from app.api.routers.chanakya import catalogue, company_scout, people_finder
 
-    monkeypatch.setattr(chanakya_router, "get_session", lambda: _test_session_factory())
+    for module in (catalogue, company_scout, people_finder):
+        monkeypatch.setattr(module, "get_session", lambda: _test_session_factory())
     monkeypatch.setattr(settings, "supabase_jwt_secret", "test-secret")
 
 
@@ -152,9 +153,9 @@ def test_company_scout_requires_offering_brief_first():
 
 
 def test_company_scout_discovers_scores_and_selects(monkeypatch):
-    import app.api.routers.chanakya as chanakya_router
+    from app.api.routers.chanakya import company_scout as company_scout_router
 
-    monkeypatch.setattr(chanakya_router, "build_search_provider", lambda *a, **k: _FakeSearchProvider())
+    monkeypatch.setattr(company_scout_router, "build_search_provider", lambda *a, **k: _FakeSearchProvider())
     monkeypatch.setattr(
         "app.services.company_discovery._is_safe_host", lambda hostname: True
     )
@@ -187,9 +188,9 @@ def test_company_scout_discovers_scores_and_selects(monkeypatch):
 
 
 def test_company_scout_respects_configured_target_count(monkeypatch):
-    import app.api.routers.chanakya as chanakya_router
+    from app.api.routers.chanakya import company_scout as company_scout_router
 
-    monkeypatch.setattr(chanakya_router, "build_search_provider", lambda *a, **k: _FakeSearchProvider())
+    monkeypatch.setattr(company_scout_router, "build_search_provider", lambda *a, **k: _FakeSearchProvider())
     monkeypatch.setattr("app.services.company_discovery._is_safe_host", lambda hostname: True)
 
     headers = _auth_header()
@@ -246,16 +247,19 @@ def test_people_finder_requires_selected_companies_first():
 
 
 def test_people_finder_discovers_leaders_per_selected_company(monkeypatch):
-    import app.api.routers.chanakya as chanakya_router
+    from app.api.routers.chanakya import company_scout as company_scout_router
+    from app.api.routers.chanakya import people_finder as people_finder_router
 
-    monkeypatch.setattr(chanakya_router, "build_search_provider", lambda *a, **k: _FakeSearchProvider())
+    monkeypatch.setattr(company_scout_router, "build_search_provider", lambda *a, **k: _FakeSearchProvider())
     monkeypatch.setattr("app.services.company_discovery._is_safe_host", lambda hostname: True)
 
     headers = _auth_header()
     run = _run_with_selected_company(headers)
     client.post(f"/chanakya/runs/{run['id']}/company-scout", headers=headers)
 
-    monkeypatch.setattr(chanakya_router, "build_search_provider", lambda *a, **k: _FakePeopleSearchProvider())
+    monkeypatch.setattr(
+        people_finder_router, "build_search_provider", lambda *a, **k: _FakePeopleSearchProvider()
+    )
 
     response = client.post(f"/chanakya/runs/{run['id']}/people-finder", headers=headers)
 
