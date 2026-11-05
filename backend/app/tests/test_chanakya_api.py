@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 from app.db.session import init_db, make_engine
+from app.providers.search_provider import SearchProvider, SearchResult
 from main import app
 
 client = TestClient(app)
@@ -130,6 +131,89 @@ def test_resubmitting_offering_brief_creates_new_version_not_overwrite():
     assert len(versions[0]["data"]["offerings"]) == 1
     assert versions[1]["version"] == 2
     assert len(versions[1]["data"]["offerings"]) == 2
+
+
+class _FakeSearchProvider(SearchProvider):
+    name = "fake"
+
+    async def search(self, query: str, max_results: int = 10) -> list[SearchResult]:
+        return [
+            SearchResult(url="https://acme.com/about", title="Acme fintech", snippet="Series B fintech company"),
+            SearchResult(url="https://globex.com/about", title="Globex fintech", snippet="Series B fintech"),
+        ]
+
+
+def test_company_scout_requires_offering_brief_first():
+    run = client.post("/chanakya/runs", json={"period": "2026-11"}, headers=_auth_header()).json()
+
+    response = client.post(f"/chanakya/runs/{run['id']}/company-scout", headers=_auth_header())
+
+    assert response.status_code == 409
+
+
+def test_company_scout_discovers_scores_and_selects(monkeypatch):
+    import app.api.routers.chanakya as chanakya_router
+
+    monkeypatch.setattr(chanakya_router, "build_search_provider", lambda *a, **k: _FakeSearchProvider())
+    monkeypatch.setattr(
+        "app.services.company_discovery._is_safe_host", lambda hostname: True
+    )
+
+    headers = _auth_header()
+    run = client.post("/chanakya/runs", json={"period": "2026-11"}, headers=headers).json()
+    client.post(
+        f"/chanakya/runs/{run['id']}/offerings",
+        json={
+            "offerings": [{"name": "GenAI Accelerator", "icp_criteria": ["fintech", "Series B"]}],
+            "filters": {"industries": []},
+        },
+        headers=headers,
+    )
+
+    response = client.post(f"/chanakya/runs/{run['id']}/company-scout", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["candidates_found"] == 2
+    assert len(body["selected"]) == 2
+    assert {c["domain"] for c in body["selected"]} == {"acme.com", "globex.com"}
+
+    run_detail = client.get(f"/chanakya/runs/{run['id']}", headers=headers).json()
+    scout = next(e for e in run_detail["agent_executions"] if e["agent_name"] == "company_scout")
+    assert scout["status"] == "completed"
+
+    companies = client.get(f"/chanakya/runs/{run['id']}/companies", headers=headers).json()
+    assert len(companies) == 2
+
+
+def test_company_scout_respects_configured_target_count(monkeypatch):
+    import app.api.routers.chanakya as chanakya_router
+
+    monkeypatch.setattr(chanakya_router, "build_search_provider", lambda *a, **k: _FakeSearchProvider())
+    monkeypatch.setattr("app.services.company_discovery._is_safe_host", lambda hostname: True)
+
+    headers = _auth_header()
+    run = client.post(
+        "/chanakya/runs", json={"period": "2026-11", "config": {"target_company_count": 1}}, headers=headers
+    ).json()
+    client.post(
+        f"/chanakya/runs/{run['id']}/offerings",
+        json={"offerings": [{"name": "X", "icp_criteria": ["fintech"]}]},
+        headers=headers,
+    )
+
+    response = client.post(f"/chanakya/runs/{run['id']}/company-scout", headers=headers)
+
+    assert len(response.json()["selected"]) == 1
+    assert len(client.get(f"/chanakya/runs/{run['id']}/companies", headers=headers).json()) == 2
+    assert (
+        len(
+            client.get(
+                f"/chanakya/runs/{run['id']}/companies?selected_only=true", headers=headers
+            ).json()
+        )
+        == 1
+    )
 
 
 def test_offerings_endpoints_404_for_unknown_run():

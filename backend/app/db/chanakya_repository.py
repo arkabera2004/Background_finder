@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.db.chanakya_models import AgentExecution, Evidence, MonthlyRun, OfferingSnapshot
+from app.db.chanakya_models import AgentExecution, Evidence, MonthlyRun, OfferingSnapshot, ScoutedCompany
 from app.schemas.chanakya import AgentExecutionStatus, AgentName, RunStatus
 
 
@@ -104,6 +104,56 @@ class ChanakyaRunRepository:
         self.session.add(evidence)
         self.session.commit()
         return evidence
+
+    def upsert_scouted_companies(self, run_id: str, owner_id: str, candidates: list[dict]) -> list[ScoutedCompany]:
+        """Dedup by (run_id, domain): re-running discovery on the same run
+        updates an existing candidate's score/source rather than duplicating it."""
+        existing = {
+            c.domain: c
+            for c in self.session.query(ScoutedCompany).filter(ScoutedCompany.run_id == run_id).all()
+        }
+        result: list[ScoutedCompany] = []
+        for candidate in candidates:
+            domain = candidate["domain"]
+            if domain in existing:
+                row = existing[domain]
+                row.name = candidate["name"]
+                row.fit_score = candidate["fit_score"]
+                row.source_url = candidate["source_url"]
+            else:
+                row = ScoutedCompany(
+                    owner_id=owner_id,
+                    run_id=run_id,
+                    name=candidate["name"],
+                    domain=domain,
+                    fit_score=candidate["fit_score"],
+                    source_url=candidate["source_url"],
+                )
+                self.session.add(row)
+                existing[domain] = row
+            result.append(row)
+        self.session.commit()
+        return result
+
+    def select_top_companies(self, run_id: str, target_count: int) -> list[ScoutedCompany]:
+        """Marks the highest-fit_score `target_count` companies `selected`
+        and clears the flag on everyone else, so re-running selection with a
+        different target is idempotent rather than additive."""
+        companies = (
+            self.session.query(ScoutedCompany).filter(ScoutedCompany.run_id == run_id).all()
+        )
+        ranked = sorted(companies, key=lambda c: c.fit_score, reverse=True)
+        selected_ids = {c.id for c in ranked[:target_count]}
+        for company in companies:
+            company.selected = company.id in selected_ids
+        self.session.commit()
+        return [c for c in ranked if c.id in selected_ids]
+
+    def list_scouted_companies(self, run_id: str, selected_only: bool = False) -> list[ScoutedCompany]:
+        query = self.session.query(ScoutedCompany).filter(ScoutedCompany.run_id == run_id)
+        if selected_only:
+            query = query.filter(ScoutedCompany.selected.is_(True))
+        return query.order_by(ScoutedCompany.fit_score.desc()).all()
 
     def mark_run_status(self, run: MonthlyRun, status: RunStatus) -> MonthlyRun:
         run.status = status.value

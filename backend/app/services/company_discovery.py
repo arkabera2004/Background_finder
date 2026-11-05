@@ -96,6 +96,21 @@ def _is_safe_host(hostname: str) -> bool:
     return not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved)
 
 
+def extract_candidate_domain(url: str) -> str | None:
+    """Normalize a search-result URL to a safe, non-aggregator domain, or
+    `None`. Shared by `discover_company_domain` (resolving one already-named
+    company) and the Company Scout agent (turning raw search results into
+    candidate companies) — same safety rules, same aggregator blocklist."""
+    hostname = urlparse(url).netloc.lower().removeprefix("www.")
+    if not hostname:
+        return None
+    if any(hostname == d or hostname.endswith(f".{d}") for d in _AGGREGATOR_DOMAINS):
+        return None
+    if "@" in hostname or not _is_safe_host(hostname.split(":")[0]):
+        return None
+    return hostname
+
+
 async def discover_company_domain(search: SearchProvider, company_name: str) -> str | None:
     """Search for `company_name`'s official website and return its
     registered domain, or `None` if no confident match was found."""

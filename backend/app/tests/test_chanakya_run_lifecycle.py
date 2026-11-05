@@ -109,6 +109,50 @@ def test_evidence_records_provenance_per_entity(session):
     assert rows[0].confidence == 0.9
 
 
+def test_upsert_scouted_companies_dedupes_by_domain(session):
+    repo = ChanakyaRunRepository(session)
+    run = repo.create_run("user-a", "2026-11")
+
+    repo.upsert_scouted_companies(
+        run.id,
+        "user-a",
+        [{"name": "Acme", "domain": "acme.com", "source_url": "https://acme.com", "fit_score": 0.5}],
+    )
+    updated = repo.upsert_scouted_companies(
+        run.id,
+        "user-a",
+        [{"name": "Acme Corp", "domain": "acme.com", "source_url": "https://acme.com/about", "fit_score": 0.9}],
+    )
+
+    assert len(updated) == 1
+    assert updated[0].name == "Acme Corp"
+    assert updated[0].fit_score == 0.9
+    assert len(repo.list_scouted_companies(run.id)) == 1
+
+
+def test_select_top_companies_marks_selected_and_is_idempotent(session):
+    repo = ChanakyaRunRepository(session)
+    run = repo.create_run("user-a", "2026-11")
+    repo.upsert_scouted_companies(
+        run.id,
+        "user-a",
+        [
+            {"name": "A", "domain": "a.com", "source_url": "https://a.com", "fit_score": 0.2},
+            {"name": "B", "domain": "b.com", "source_url": "https://b.com", "fit_score": 0.9},
+            {"name": "C", "domain": "c.com", "source_url": "https://c.com", "fit_score": 0.5},
+        ],
+    )
+
+    selected = repo.select_top_companies(run.id, 2)
+    assert {c.domain for c in selected} == {"b.com", "c.com"}
+    assert {c.domain for c in repo.list_scouted_companies(run.id, selected_only=True)} == {"b.com", "c.com"}
+
+    # re-running with a smaller target clears the previous selection rather than adding to it
+    reselected = repo.select_top_companies(run.id, 1)
+    assert {c.domain for c in reselected} == {"b.com"}
+    assert {c.domain for c in repo.list_scouted_companies(run.id, selected_only=True)} == {"b.com"}
+
+
 def test_mark_run_status_sets_completed_at(session):
     repo = ChanakyaRunRepository(session)
     run = repo.create_run("user-a", "2026-11")

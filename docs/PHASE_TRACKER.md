@@ -167,3 +167,41 @@ rejection, re-submission creating version 2 without touching version 1,
 290). `ruff check app main.py` → 0 errors. `mypy app main.py
 --ignore-missing-imports` → 0 errors. SQLite-only; no live Supabase/API
 call made.
+
+## Chanakya Phase 3 — Company Scout (Agent 02)
+
+- `app/services/company_scout.py`: `score_fit()` — crude, honest fit
+  score (fraction of an offering's ICP-criteria terms found in a search
+  result's title/snippet; `0.0` when nothing matches, never fabricated).
+  `discover_candidates()` — one search query per ICP criterion (or a bare
+  industry query if none given), deduped by domain via a new shared
+  helper. `select_top_companies()` — pure ranking by fit score.
+- `app/services/company_discovery.py`: extracted `extract_candidate_domain()`
+  from the existing `discover_company_domain()` so both the single-company
+  resolver and the new multi-company scout share the same aggregator
+  blocklist + SSRF-safety check, instead of duplicating it.
+- New ORM model `ScoutedCompany` (`chanakya_scouted_companies`, unique on
+  `(run_id, domain)`) with `fit_score`/`selected`/`source_url`. Repository:
+  `upsert_scouted_companies()` (dedups by domain — re-running discovery
+  updates a candidate's score rather than duplicating it),
+  `select_top_companies()` (idempotent — re-selecting with a smaller
+  target clears the previous selection rather than adding to it, so target
+  count changes don't accumulate stale "selected" rows), `list_scouted_companies()`.
+- `POST /chanakya/runs/{id}/company-scout`: reads the run's latest
+  `OfferingSnapshot` (409 if none submitted yet), builds the configured
+  `SearchProvider` (reusing `build_search_provider`, same as the
+  single-prospect pipeline), discovers/scores/dedupes/selects
+  (`config.target_company_count`, default 100), records one `Evidence`
+  row per selected company, marks Company Scout's `AgentExecution`
+  complete (or `failed` with the real error on a provider exception,
+  surfaced as a 502, not a silently-passed run).
+- `GET /chanakya/runs/{id}/companies?selected_only=` — list results.
+
+Tests: 3 service-level (`test_company_scout.py`: fit scoring, dedup +
+aggregator filtering, ranking) + 2 repository-level (upsert dedup,
+idempotent selection) + 4 API-level (`test_chanakya_api.py`: 409 without
+an offering brief, discover→score→select→Evidence→agent-complete happy
+path with a fake search provider, configurable target count, selected-only
+filter). Full backend suite: **306 passed** (up from 298). `ruff`/`mypy`
+both 0 errors. All fixture-tested (fake `SearchProvider`) — no live
+DuckDuckGo/Tavily company-discovery call made this phase.

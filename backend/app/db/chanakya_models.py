@@ -19,7 +19,7 @@ answerable without each agent inventing its own sourcing table.
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.models import Base
@@ -52,6 +52,9 @@ class MonthlyRun(Base):
         back_populates="run", cascade="all, delete-orphan"
     )
     evidence: Mapped[list["Evidence"]] = relationship(back_populates="run", cascade="all, delete-orphan")
+    scouted_companies: Mapped[list["ScoutedCompany"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (Index("ix_chanakya_runs_owner_period", "owner_id", "period"),)
 
@@ -130,3 +133,27 @@ class Evidence(Base):
     run: Mapped[MonthlyRun] = relationship(back_populates="evidence")
 
     __table_args__ = (Index("ix_evidence_entity", "entity_type", "entity_id"),)
+
+
+class ScoutedCompany(Base):
+    """Agent 02's output: a company discovered for a run, scored for ICP
+    fit, and optionally selected into the run's final top-N set."""
+
+    __tablename__ = "chanakya_scouted_companies"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    owner_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    run_id: Mapped[str] = mapped_column(
+        String, ForeignKey("chanakya_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    domain: Mapped[str] = mapped_column(String, nullable=False)
+    fit_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    selected: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    source_url: Mapped[str] = mapped_column(String, nullable=False)
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    run: Mapped[MonthlyRun] = relationship(back_populates="scouted_companies")
+
+    __table_args__ = (Index("ix_scouted_companies_run_domain", "run_id", "domain", unique=True),)
