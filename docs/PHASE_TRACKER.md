@@ -526,3 +526,67 @@ logging of sensitive actions (approvals aren't logged anywhere beyond
 the QA record's own `approval_status`), secret rotation, and a
 documented data-retention/deletion *policy* beyond the mechanical purge
 implemented here. Not claimed as done.
+
+## Chanakya Phase 12 — Testing and evaluation
+
+- `app/tests/test_chanakya_end_to_end.py`: one deterministic test that
+  drives the entire monthly pipeline in sequence — run creation →
+  offering brief → orchestrate (Agents 02-07) → asserts each agent's
+  *actual* output (not just a status code: real company domain, real
+  confirmed identity, real 5 email candidates, a real brief, a real QA
+  record) → human approval → export reflecting the approval → an
+  idempotent rerun that leaves everything unchanged. This is the "full
+  end-to-end monthly pipeline using deterministic fixtures" test the
+  master prompt's testing section asks for, previously only covered
+  piecemeal across individual agent test files.
+- `docs/TESTING.md` updated with a full index of every Chanakya test
+  file and what it covers, plus the same honesty convention as the rest
+  of this repo: fixture-tested only, no live provider or Supabase call.
+
+Full backend suite: **376 passed** (up from 375). `ruff`/`mypy` both 0
+errors.
+
+**Not done**: no dedicated eval-framework fixtures for Chanakya (the
+existing `app/evals/` framework evaluates single-prospect brief quality,
+not Chanakya's agents), no load/concurrency testing, no test of a real
+multi-user/multi-month dataset at the "100 companies / 300-500 leaders"
+scale the master prompt targets — everything here runs on 1-2 fixture
+companies/people, proving the *mechanism* works, not the *scale*.
+
+## Chanakya Phase 13 — Azure deployment readiness
+
+- `frontend/next.config.ts`: added `output: "standalone"` — verified
+  locally this produces a minimal `.next/standalone` build (confirmed
+  `server.js` + pruned `node_modules` present) that a container image
+  needs instead of the full dev tree.
+- `frontend/Dockerfile` (new) + `.dockerignore` (new): a two-stage
+  Node 20 build mirroring `backend/Dockerfile`'s existing pattern.
+  **Not verified by an actual `docker build`** — the Docker daemon was
+  not running in this environment; the Next.js standalone build itself
+  was verified, the containerization step was not. Documented as an
+  open verification gap, not claimed as tested.
+- `docs/DEPLOYMENT_AZURE.md` (new): maps the master prompt's 7-layer
+  Azure architecture to this repo's actual services (Container Apps for
+  API/worker/frontend, Container Apps Job for the monthly trigger,
+  Postgres Flexible Server, Key Vault, Front Door, Entra ID, Service
+  Bus for the still-missing real queue from Phase 9) with concrete
+  environment-variable requirements per service and a rollback note.
+  **No Azure resource of any kind has been provisioned** — this is a
+  deployment guide and environment template, not a deployment.
+- `docs/COST_ESTIMATE.md` (new): breaks down the master prompt's
+  $170-$300/month estimate by service, flags which costs are
+  Azure-infrastructure vs. external-provider usage (Tavily/NeverBounce/
+  Clay/etc., all currently running on free/null fallbacks in this repo),
+  and names the concrete levers to disable each optional paid service.
+
+## Chanakya Phase 14 — Final acceptance
+
+See `docs/FINAL_ACCEPTANCE_REPORT.md` (new) for the complete, verified-
+vs-claimed status across every phase, the definition-of-done checklist
+from the master prompt section 13, and the full remaining-blockers list.
+Headline: all seven agents and the orchestrator are implemented and
+chained end-to-end under fixture tests (376 backend tests passing,
+ruff/mypy clean, one connected frontend dashboard); nothing has been
+run against live external providers, a real Supabase/Postgres instance,
+or any provisioned Azure resource — those remain explicit, documented
+blockers, not gaps papered over with a status claim.
