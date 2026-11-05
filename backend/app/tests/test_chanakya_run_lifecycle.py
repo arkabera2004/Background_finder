@@ -153,6 +153,34 @@ def test_select_top_companies_marks_selected_and_is_idempotent(session):
     assert {c.domain for c in repo.list_scouted_companies(run.id, selected_only=True)} == {"b.com"}
 
 
+def test_upsert_people_dedupes_by_full_name_within_company(session):
+    repo = ChanakyaRunRepository(session)
+    run = repo.create_run("user-a", "2026-11")
+    [company] = repo.upsert_scouted_companies(
+        run.id, "user-a", [{"name": "Acme", "domain": "acme.com", "source_url": "https://acme.com", "fit_score": 1.0}]
+    )
+
+    repo.upsert_people(
+        run.id,
+        "user-a",
+        company.id,
+        [{"full_name": "Jane Doe", "role": "CEO", "linkedin_url": "https://linkedin.com/in/jane", "confidence": 0.8}],
+    )
+    updated = repo.upsert_people(
+        run.id,
+        "user-a",
+        company.id,
+        [{"full_name": "Jane Doe", "role": "Founder & CEO", "linkedin_url": "https://linkedin.com/in/jane", "confidence": 0.95}],
+    )
+
+    assert len(updated) == 1
+    assert updated[0].role == "Founder & CEO"
+    assert updated[0].confidence == 0.95
+    assert updated[0].identity_confirmed is False
+    assert len(repo.list_people(run.id)) == 1
+    assert len(repo.list_people(run.id, company_id=company.id)) == 1
+
+
 def test_mark_run_status_sets_completed_at(session):
     repo = ChanakyaRunRepository(session)
     run = repo.create_run("user-a", "2026-11")

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.db.chanakya_models import AgentExecution, Evidence, MonthlyRun, OfferingSnapshot, ScoutedCompany
+from app.db.chanakya_models import AgentExecution, Evidence, MonthlyRun, OfferingSnapshot, Person, ScoutedCompany
 from app.schemas.chanakya import AgentExecutionStatus, AgentName, RunStatus
 
 
@@ -154,6 +154,46 @@ class ChanakyaRunRepository:
         if selected_only:
             query = query.filter(ScoutedCompany.selected.is_(True))
         return query.order_by(ScoutedCompany.fit_score.desc()).all()
+
+    def upsert_people(self, run_id: str, owner_id: str, company_id: str, candidates: list[dict]) -> list[Person]:
+        """Dedup by (run_id, company_id, full_name): re-running discovery
+        for a company updates an existing candidate's role/confidence
+        rather than duplicating them."""
+        existing = {
+            p.full_name: p
+            for p in self.session.query(Person)
+            .filter(Person.run_id == run_id, Person.company_id == company_id)
+            .all()
+        }
+        result: list[Person] = []
+        for candidate in candidates:
+            name = candidate["full_name"]
+            if name in existing:
+                row = existing[name]
+                row.role = candidate["role"]
+                row.linkedin_url = candidate["linkedin_url"]
+                row.confidence = candidate["confidence"]
+            else:
+                row = Person(
+                    owner_id=owner_id,
+                    run_id=run_id,
+                    company_id=company_id,
+                    full_name=name,
+                    role=candidate["role"],
+                    linkedin_url=candidate["linkedin_url"],
+                    confidence=candidate["confidence"],
+                )
+                self.session.add(row)
+                existing[name] = row
+            result.append(row)
+        self.session.commit()
+        return result
+
+    def list_people(self, run_id: str, company_id: str | None = None) -> list[Person]:
+        query = self.session.query(Person).filter(Person.run_id == run_id)
+        if company_id:
+            query = query.filter(Person.company_id == company_id)
+        return query.order_by(Person.confidence.desc()).all()
 
     def mark_run_status(self, run: MonthlyRun, status: RunStatus) -> MonthlyRun:
         run.status = status.value

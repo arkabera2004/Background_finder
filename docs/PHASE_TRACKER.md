@@ -205,3 +205,45 @@ path with a fake search provider, configurable target count, selected-only
 filter). Full backend suite: **306 passed** (up from 298). `ruff`/`mypy`
 both 0 errors. All fixture-tested (fake `SearchProvider`) — no live
 DuckDuckGo/Tavily company-discovery call made this phase.
+
+(Note: `migrations/0002_chanakya_phase1.sql` for `chanakya_scouted_companies`
+was written in the Phase 4 commit, not here — caught up together.)
+
+## Chanakya Phase 4 — People Finder (Agent 03)
+
+- `app/services/people_finder.py`: `PRIORITY_ROLES` (CEO/CTO/CIO/CDO/VP
+  Engineering/VP Product/COO/Head of AI). `extract_name_from_result_title()`
+  parses the common LinkedIn search-result title shape ("Name - Role -
+  Company | LinkedIn"), returning `None` rather than guessing when the
+  format doesn't match. `score_confidence()` rewards a `linkedin.com/in/`
+  URL plus company-name/role mentions in the snippet — still never claims
+  identity confirmation. `discover_people_for_company()` queries once per
+  priority role and dedupes by normalized name. `select_leaders()` ranks
+  by confidence and caps at the configured count.
+- **Identity is explicitly never confirmed here**: every candidate's
+  `identity_confirmed` is hardcoded `False` at creation — only Agent 04
+  (LinkedIn Resolver, Phase 5) is allowed to change that, after real
+  disambiguation, per the master prompt's "avoid treating uncertain
+  identity matches as confirmed."
+- New ORM model `Person` (`chanakya_people`, unique on
+  `(run_id, company_id, full_name)`), FK'd to `ScoutedCompany`. Repository:
+  `upsert_people()` (dedup by name within a company), `list_people()`
+  (optionally filtered by `company_id`).
+- `POST /chanakya/runs/{id}/people-finder`: iterates every **selected**
+  `ScoutedCompany` for the run (409 if Company Scout hasn't selected any
+  yet), discovers/ranks/persists up to `config.people_per_company`
+  (default 4) leaders per company, records one `Evidence` row per person,
+  marks the People Finder `AgentExecution` complete (or failed/502 on a
+  real provider error, same pattern as Company Scout).
+- `GET /chanakya/runs/{id}/people?company_id=` — list results.
+- `migrations/0002_chanakya_phase1.sql` updated with both
+  `chanakya_scouted_companies` (Phase 3, previously missing from the
+  migration file) and `chanakya_people` tables + RLS policies.
+
+Tests: 4 service-level (name parsing incl. non-match, confidence scoring,
+cross-role dedup, ranking+cap) + 1 repository-level (dedup-by-name
+upsert) + 3 API-level (409 before company selection, full
+discover→select→persist→Evidence→agent-complete happy path across two
+companies with a fake provider, list endpoint). Full backend suite:
+**313 passed** (up from 306). `ruff`/`mypy` both 0 errors. Fixture-tested
+only — no live search call.

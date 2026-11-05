@@ -48,6 +48,34 @@ create table if not exists chanakya_evidence (
 );
 create index if not exists ix_evidence_entity on chanakya_evidence (entity_type, entity_id);
 
+create table if not exists chanakya_scouted_companies (
+    id uuid primary key default gen_random_uuid(),
+    owner_id uuid not null references auth.users(id) on delete cascade,
+    run_id uuid not null references chanakya_runs(id) on delete cascade,
+    name text not null,
+    domain text not null,
+    fit_score double precision not null default 0,
+    selected boolean not null default false,
+    source_url text not null,
+    data jsonb not null default '{}',
+    created_at timestamptz not null default now(),
+    unique (run_id, domain)
+);
+
+create table if not exists chanakya_people (
+    id uuid primary key default gen_random_uuid(),
+    owner_id uuid not null references auth.users(id) on delete cascade,
+    run_id uuid not null references chanakya_runs(id) on delete cascade,
+    company_id uuid not null references chanakya_scouted_companies(id) on delete cascade,
+    full_name text not null,
+    role text not null,
+    linkedin_url text,
+    confidence double precision not null default 0,
+    identity_confirmed boolean not null default false,
+    created_at timestamptz not null default now(),
+    unique (run_id, company_id, full_name)
+);
+
 alter table chanakya_runs enable row level security;
 alter table chanakya_offering_snapshots enable row level security;
 alter table chanakya_agent_executions enable row level security;
@@ -72,3 +100,12 @@ create policy owner_select on chanakya_evidence for select using (
 create policy owner_all on chanakya_evidence for all using (
     exists (select 1 from chanakya_runs r where r.id = chanakya_evidence.run_id and r.owner_id = auth.uid())
 );
+
+alter table chanakya_scouted_companies enable row level security;
+alter table chanakya_people enable row level security;
+
+create policy owner_select on chanakya_scouted_companies for select using (owner_id = auth.uid());
+create policy owner_all on chanakya_scouted_companies for all using (owner_id = auth.uid());
+
+create policy owner_select on chanakya_people for select using (owner_id = auth.uid());
+create policy owner_all on chanakya_people for all using (owner_id = auth.uid());

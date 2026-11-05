@@ -216,6 +216,63 @@ def test_company_scout_respects_configured_target_count(monkeypatch):
     )
 
 
+class _FakePeopleSearchProvider(SearchProvider):
+    name = "fake-people"
+
+    async def search(self, query: str, max_results: int = 10) -> list[SearchResult]:
+        if "CEO" in query:
+            return [SearchResult(url="https://linkedin.com/in/janedoe", title="Jane Doe - CEO - Acme | LinkedIn")]
+        if "CTO" in query:
+            return [SearchResult(url="https://linkedin.com/in/johnsmith", title="John Smith - CTO - Acme | LinkedIn")]
+        return []
+
+
+def _run_with_selected_company(headers):
+    run = client.post("/chanakya/runs", json={"period": "2026-11"}, headers=headers).json()
+    client.post(
+        f"/chanakya/runs/{run['id']}/offerings",
+        json={"offerings": [{"name": "X", "icp_criteria": ["fintech"]}]},
+        headers=headers,
+    )
+    return run
+
+
+def test_people_finder_requires_selected_companies_first():
+    run = client.post("/chanakya/runs", json={"period": "2026-11"}, headers=_auth_header()).json()
+
+    response = client.post(f"/chanakya/runs/{run['id']}/people-finder", headers=_auth_header())
+
+    assert response.status_code == 409
+
+
+def test_people_finder_discovers_leaders_per_selected_company(monkeypatch):
+    import app.api.routers.chanakya as chanakya_router
+
+    monkeypatch.setattr(chanakya_router, "build_search_provider", lambda *a, **k: _FakeSearchProvider())
+    monkeypatch.setattr("app.services.company_discovery._is_safe_host", lambda hostname: True)
+
+    headers = _auth_header()
+    run = _run_with_selected_company(headers)
+    client.post(f"/chanakya/runs/{run['id']}/company-scout", headers=headers)
+
+    monkeypatch.setattr(chanakya_router, "build_search_provider", lambda *a, **k: _FakePeopleSearchProvider())
+
+    response = client.post(f"/chanakya/runs/{run['id']}/people-finder", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["companies_processed"] == 2
+    assert len(body["people"]) == 4  # 2 leaders x 2 companies
+    assert all(p["identity_confirmed"] is False for p in body["people"])
+
+    run_detail = client.get(f"/chanakya/runs/{run['id']}", headers=headers).json()
+    pf = next(e for e in run_detail["agent_executions"] if e["agent_name"] == "people_finder")
+    assert pf["status"] == "completed"
+
+    people = client.get(f"/chanakya/runs/{run['id']}/people", headers=headers).json()
+    assert len(people) == 4
+
+
 def test_offerings_endpoints_404_for_unknown_run():
     headers = _auth_header()
     assert client.get("/chanakya/runs/nonexistent/offerings", headers=headers).status_code == 404

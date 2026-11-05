@@ -55,6 +55,7 @@ class MonthlyRun(Base):
     scouted_companies: Mapped[list["ScoutedCompany"]] = relationship(
         back_populates="run", cascade="all, delete-orphan"
     )
+    people: Mapped[list["Person"]] = relationship(back_populates="run", cascade="all, delete-orphan")
 
     __table_args__ = (Index("ix_chanakya_runs_owner_period", "owner_id", "period"),)
 
@@ -157,3 +158,33 @@ class ScoutedCompany(Base):
     run: Mapped[MonthlyRun] = relationship(back_populates="scouted_companies")
 
     __table_args__ = (Index("ix_scouted_companies_run_domain", "run_id", "domain", unique=True),)
+
+
+class Person(Base):
+    """Agent 03's output: a candidate leader proposed for a company and
+    role. `identity_confirmed` stays False here always — only Agent 04
+    (LinkedIn Resolver) is allowed to flip it, after real disambiguation."""
+
+    __tablename__ = "chanakya_people"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    owner_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    run_id: Mapped[str] = mapped_column(
+        String, ForeignKey("chanakya_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    company_id: Mapped[str] = mapped_column(
+        String, ForeignKey("chanakya_scouted_companies.id", ondelete="CASCADE"), nullable=False
+    )
+    full_name: Mapped[str] = mapped_column(String, nullable=False)
+    role: Mapped[str] = mapped_column(String, nullable=False)
+    linkedin_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    confidence: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    identity_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    run: Mapped[MonthlyRun] = relationship(back_populates="people")
+    company: Mapped[ScoutedCompany] = relationship()
+
+    __table_args__ = (
+        Index("ix_people_run_company_name", "run_id", "company_id", "full_name", unique=True),
+    )
