@@ -57,6 +57,9 @@ class MonthlyRun(Base):
     )
     people: Mapped[list["Person"]] = relationship(back_populates="run", cascade="all, delete-orphan")
     emails: Mapped[list["EmailCandidate"]] = relationship(back_populates="run", cascade="all, delete-orphan")
+    research_briefs: Mapped[list["ResearchBrief"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (Index("ix_chanakya_runs_owner_period", "owner_id", "period"),)
 
@@ -224,3 +227,30 @@ class EmailCandidate(Base):
     __table_args__ = (
         Index("ix_email_candidates_run_person_email", "run_id", "person_id", "email", unique=True),
     )
+
+
+class ResearchBrief(Base):
+    """Agent 06's output: the ProspectBrief produced by driving the
+    existing single-prospect pipeline for a confirmed person. `status`
+    mirrors the underlying pipeline run's status ("completed" | "failed" |
+    "cancelled") — a non-"completed" row's `data` stays empty rather than
+    a partial/fabricated brief."""
+
+    __tablename__ = "chanakya_research_briefs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    owner_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    run_id: Mapped[str] = mapped_column(
+        String, ForeignKey("chanakya_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    person_id: Mapped[str] = mapped_column(
+        String, ForeignKey("chanakya_people.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    run: Mapped[MonthlyRun] = relationship(back_populates="research_briefs")
+    person: Mapped[Person] = relationship()
+
+    __table_args__ = (Index("ix_research_briefs_run_person", "run_id", "person_id", unique=True),)

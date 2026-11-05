@@ -336,3 +336,35 @@ not faked as verified — and a per-person filter). Full backend suite:
 NeverBounce call made; the website/contact-page discovery tier ahead of
 pattern-guessing from the master prompt is not yet implemented
 (documented gap).
+
+## Chanakya Phase 7 — Profile Researcher (Agent 06)
+
+- `app/services/profile_researcher.py` is deliberately thin:
+  `research_person()` drives the **existing** single-prospect pipeline
+  (`app/services/research_service.create_run`/`execute_run` — the same
+  `ResolveIdentityStage → ... → SynthesiseBriefStage` chain, citation
+  validator included) for a confirmed person's name + LinkedIn URL +
+  company, and returns exactly what that pipeline produced: `status`
+  and `brief`. No new career/activity/company research logic was
+  written — Agent 06's job for a *single* person is what ProspectLens
+  already does well; this agent's actual contribution is driving it
+  across a whole run's confirmed people and persisting the result there.
+- New `ResearchBrief` table (`chanakya_research_briefs`, unique on
+  `(run_id, person_id)`) — `status` mirrors the underlying pipeline run's
+  status; a non-`"completed"` row's `data` stays `{}` rather than a
+  partial or fabricated brief. Repository: `upsert_research_brief()`
+  (replaces on re-run, doesn't accumulate), `list_research_briefs()`.
+- `POST /chanakya/runs/{id}/profile-researcher`: runs research for every
+  `identity_confirmed` person (409 if none yet), records `Evidence` from
+  each completed brief's own `sources` list (never invents a source),
+  tallies completed vs. failed rather than hard-failing the whole agent
+  on one person's pipeline failure (the underlying pipeline already
+  contains per-stage failures internally).
+- `GET /chanakya/runs/{id}/briefs?person_id=` — list results.
+
+Tests: 1 service-level (pipeline-driving contract, accepting whatever
+status the real pipeline returns under test's null/rule-based providers)
++ 1 repository-level (replace-on-rerun dedup) + 3 API-level (409 before
+confirmed people, full chain through all four prior agents producing one
+brief per confirmed person, person-filtered list). Full backend suite:
+**339 passed** (up from 334). `ruff`/`mypy` both 0 errors.

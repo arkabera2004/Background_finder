@@ -9,6 +9,7 @@ from app.db.chanakya_models import (
     MonthlyRun,
     OfferingSnapshot,
     Person,
+    ResearchBrief,
     ScoutedCompany,
 )
 from app.schemas.chanakya import AgentExecutionStatus, AgentName, RunStatus
@@ -270,6 +271,35 @@ class ChanakyaRunRepository:
         if person_id:
             query = query.filter(EmailCandidate.person_id == person_id)
         return query.order_by(EmailCandidate.confidence.desc()).all()
+
+    def upsert_research_brief(
+        self, run_id: str, owner_id: str, person_id: str, status: str, data: dict
+    ) -> ResearchBrief:
+        """Dedup by (run_id, person_id): re-running research for a person
+        replaces the prior brief rather than accumulating duplicates."""
+        existing = (
+            self.session.query(ResearchBrief)
+            .filter(ResearchBrief.run_id == run_id, ResearchBrief.person_id == person_id)
+            .one_or_none()
+        )
+        if existing:
+            existing.status = status
+            existing.data = data
+            self.session.commit()
+            return existing
+
+        brief = ResearchBrief(
+            owner_id=owner_id, run_id=run_id, person_id=person_id, status=status, data=data
+        )
+        self.session.add(brief)
+        self.session.commit()
+        return brief
+
+    def list_research_briefs(self, run_id: str, person_id: str | None = None) -> list[ResearchBrief]:
+        query = self.session.query(ResearchBrief).filter(ResearchBrief.run_id == run_id)
+        if person_id:
+            query = query.filter(ResearchBrief.person_id == person_id)
+        return query.order_by(ResearchBrief.created_at.desc()).all()
 
     def mark_run_status(self, run: MonthlyRun, status: RunStatus) -> MonthlyRun:
         run.status = status.value

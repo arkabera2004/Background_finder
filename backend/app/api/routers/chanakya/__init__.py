@@ -8,7 +8,14 @@ app.db.chanakya_repository.
 
 from fastapi import APIRouter
 
-from app.api.routers.chanakya import catalogue, company_scout, email_hunter, linkedin_resolver, people_finder
+from app.api.routers.chanakya import (
+    catalogue,
+    company_scout,
+    email_hunter,
+    linkedin_resolver,
+    people_finder,
+    profile_researcher,
+)
 
 router = APIRouter()
 router.include_router(catalogue.router)
@@ -16,3 +23,4 @@ router.include_router(company_scout.router)
 router.include_router(people_finder.router)
 router.include_router(linkedin_resolver.router)
 router.include_router(email_hunter.router)
+router.include_router(profile_researcher.router)

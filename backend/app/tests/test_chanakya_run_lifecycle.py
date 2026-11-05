@@ -265,6 +265,25 @@ def test_upsert_email_candidates_dedupes_by_email(session):
     assert len(repo.list_email_candidates(run.id, person_id=person.id)) == 1
 
 
+def test_upsert_research_brief_replaces_on_rerun(session):
+    repo = ChanakyaRunRepository(session)
+    run = repo.create_run("user-a", "2026-11")
+    [company] = repo.upsert_scouted_companies(
+        run.id, "user-a", [{"name": "Acme", "domain": "acme.com", "source_url": "https://acme.com", "fit_score": 1.0}]
+    )
+    [person] = repo.upsert_people(
+        run.id, "user-a", company.id, [{"full_name": "Jane Doe", "role": "CEO", "linkedin_url": None, "confidence": 0.5}]
+    )
+
+    repo.upsert_research_brief(run.id, "user-a", person.id, "failed", {})
+    updated = repo.upsert_research_brief(run.id, "user-a", person.id, "completed", {"career": ["CEO at Acme"]})
+
+    assert updated.status == "completed"
+    assert updated.data == {"career": ["CEO at Acme"]}
+    assert len(repo.list_research_briefs(run.id)) == 1
+    assert len(repo.list_research_briefs(run.id, person_id=person.id)) == 1
+
+
 def test_mark_run_status_sets_completed_at(session):
     repo = ChanakyaRunRepository(session)
     run = repo.create_run("user-a", "2026-11")
