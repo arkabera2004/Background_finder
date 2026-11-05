@@ -135,3 +135,35 @@ provenance, run status transitions). Full backend suite: **290 passed**
 (up from 283). `ruff check app` → 0 errors. `mypy app main.py
 --ignore-missing-imports` → 0 errors. All of this is local SQLite-backed;
 none of it has run against a real Supabase/Postgres instance.
+
+## Chanakya Phase 2 — Catalogue Agent (API)
+
+New router `app/api/routers/chanakya.py` (mounted under `/chanakya`,
+included in `main.py`), built directly on Phase 1's
+`ChanakyaRunRepository`:
+
+- `POST /chanakya/runs` — create a monthly run (`period` validated as
+  `YYYY-MM`, optional `config`); seeds all 7 `AgentExecution` rows
+  (reused from Phase 1).
+- `GET /chanakya/runs`, `GET /chanakya/runs/{id}` — owner-scoped list/get,
+  404 cross-owner (matches the existing companies/prospects convention).
+- `POST /chanakya/runs/{id}/offerings` — Agent 01: submit/revise the
+  offering + ICP brief (`app/schemas/catalogue.py`: `OfferingInput`,
+  `OfferingBriefInput`, non-empty validated). Each call creates a new
+  `OfferingSnapshot` **version** rather than overwriting — manual
+  review/editing never destroys a prior reproducible input — and marks
+  the Catalogue `AgentExecution` complete.
+- `GET /chanakya/runs/{id}/offerings` — list all versions, oldest first.
+
+No frontend yet (Phase 10 covers the dashboard). No company-discovery
+logic yet — that's Phase 3 (Company Scout), which will read the latest
+`OfferingSnapshot` this phase produces.
+
+Tests: 8 new in `app/tests/test_chanakya_api.py` (run creation + seeded
+executions, period validation, owner scoping including cross-owner 404,
+offering submission completing the Catalogue agent, empty-offerings
+rejection, re-submission creating version 2 without touching version 1,
+404s on an unknown run). Full backend suite: **298 passed** (up from
+290). `ruff check app main.py` → 0 errors. `mypy app main.py
+--ignore-missing-imports` → 0 errors. SQLite-only; no live Supabase/API
+call made.
