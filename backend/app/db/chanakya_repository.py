@@ -195,6 +195,33 @@ class ChanakyaRunRepository:
             query = query.filter(Person.company_id == company_id)
         return query.order_by(Person.confidence.desc()).all()
 
+    def get_person(self, person_id: str, run_id: str) -> Person | None:
+        return (
+            self.session.query(Person)
+            .filter(Person.id == person_id, Person.run_id == run_id)
+            .one_or_none()
+        )
+
+    def apply_resolution(
+        self, person: Person, resolution_status: str, linkedin_url: str | None, candidate_profiles: list
+    ) -> Person:
+        person.resolution_status = resolution_status
+        person.candidate_profiles = candidate_profiles
+        if resolution_status == "confirmed":
+            person.linkedin_url = linkedin_url
+            person.identity_confirmed = True
+        self.session.commit()
+        return person
+
+    def confirm_person_manually(self, person: Person, linkedin_url: str) -> Person:
+        """A human picked one of the ambiguous candidates (or supplied a
+        fresh URL) — the manual-review-queue resolution path."""
+        person.linkedin_url = linkedin_url
+        person.identity_confirmed = True
+        person.resolution_status = "confirmed"
+        self.session.commit()
+        return person
+
     def mark_run_status(self, run: MonthlyRun, status: RunStatus) -> MonthlyRun:
         run.status = status.value
         if status in (RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELLED):

@@ -180,6 +180,11 @@ class Person(Base):
     linkedin_url: Mapped[str | None] = mapped_column(String, nullable=True)
     confidence: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     identity_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Agent 04 (LinkedIn Resolver) lifecycle: "pending" (not yet run) ->
+    # "confirmed" (exactly one match, or a human picked one) | "ambiguous"
+    # (2+ candidates, awaiting human pick) | "unresolved" (zero candidates).
+    resolution_status: Mapped[str] = mapped_column(String, default="pending", nullable=False)
+    candidate_profiles: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     run: Mapped[MonthlyRun] = relationship(back_populates="people")

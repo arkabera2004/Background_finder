@@ -247,3 +247,53 @@ discover→select→persist→Evidence→agent-complete happy path across two
 companies with a fake provider, list endpoint). Full backend suite:
 **313 passed** (up from 306). `ruff`/`mypy` both 0 errors. Fixture-tested
 only — no live search call.
+
+## Code organization: one router file per agent
+
+Before Phase 5, `app/api/routers/chanakya.py` (one file covering 3
+agents) was split into `app/api/routers/chanakya/` — a package with one
+module per agent (`catalogue.py`, `company_scout.py`, `people_finder.py`,
+and now `linkedin_resolver.py`), a `shared.py` for the serializers/
+lookups every agent needs, and an `__init__.py` aggregating them under
+the same `/chanakya` prefix. No endpoint, behavior, or test changed —
+313 tests still pass — only which file each endpoint lives in. Each
+later agent phase adds its own file here rather than growing a shared
+one; `app/services/` already had this per-agent separation
+(`company_scout.py`, `people_finder.py`, ...) from Phase 3 onward.
+
+## Chanakya Phase 5 — LinkedIn Resolver (Agent 04)
+
+- `app/services/linkedin_resolver.py`: `resolve_person_identity()` reuses
+  `find_identity_candidates()` (already proven in ProspectLens's
+  single-prospect identity disambiguation) rather than reimplementing
+  search-based matching. Exactly one candidate → `"confirmed"`; zero →
+  `"unresolved"`; two or more → `"ambiguous"`. Only the single-match case
+  is allowed to set a `linkedin_url` — the master prompt's "no fabricated
+  profile URLs" / "avoid treating uncertain matches as confirmed" rule
+  enforced in code, not just in the prompt.
+- `Person` gains `resolution_status` (`pending`/`confirmed`/`ambiguous`/
+  `unresolved`) and `candidate_profiles` (the raw search hits shown to a
+  reviewer — never fabricated, exactly what the search provider
+  returned). Repository: `apply_resolution()` (auto path — only
+  `"confirmed"` sets `identity_confirmed`), `confirm_person_manually()`
+  (human picks a profile, always confirms), `get_person()`.
+- `POST /chanakya/runs/{id}/linkedin-resolver`: resolves every `pending`
+  person on the run against its company; 409 if People Finder hasn't run
+  yet. Records `Evidence` for every auto-confirmed person.
+- `GET /chanakya/runs/{id}/people/needs-review` — the manual review
+  queue: every `ambiguous`/`unresolved` person with their candidate
+  profiles attached, for a human to pick from.
+- `POST /chanakya/runs/{id}/people/{person_id}/resolve` — manual
+  confirmation (`ManualIdentityConfirmation` schema rejects anything that
+  isn't a `linkedin.com/in/` URL), always marks `identity_confirmed`.
+
+Tests: 3 service-level (confirmed/ambiguous/unresolved outcomes) + 3
+repository-level (apply_resolution confirmed vs. ambiguous, manual
+override) + 5 API-level (`test_linkedin_resolver_api.py`: 409 before
+People Finder, single-match auto-confirm end-to-end through the whole
+agent chain, ambiguous → manual-review-queue → manual resolve, non-
+LinkedIn URL rejected, 404 for an unknown person). Full backend suite:
+**324 passed** (up from 313). `ruff`/`mypy` both 0 errors. Fixture-tested
+only — no live search/Clay/browser call; the master prompt's Clay and
+browser-based waterfall tiers ahead of search are not yet implemented
+(documented gap, not claimed as done).

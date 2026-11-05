@@ -181,6 +181,61 @@ def test_upsert_people_dedupes_by_full_name_within_company(session):
     assert len(repo.list_people(run.id, company_id=company.id)) == 1
 
 
+def test_apply_resolution_confirmed_sets_linkedin_url_and_identity_confirmed(session):
+    repo = ChanakyaRunRepository(session)
+    run = repo.create_run("user-a", "2026-11")
+    [company] = repo.upsert_scouted_companies(
+        run.id, "user-a", [{"name": "Acme", "domain": "acme.com", "source_url": "https://acme.com", "fit_score": 1.0}]
+    )
+    [person] = repo.upsert_people(
+        run.id, "user-a", company.id, [{"full_name": "Jane Doe", "role": "CEO", "linkedin_url": None, "confidence": 0.5}]
+    )
+
+    repo.apply_resolution(
+        person, "confirmed", "https://linkedin.com/in/janedoe", [{"linkedin_url": "https://linkedin.com/in/janedoe"}]
+    )
+
+    assert person.resolution_status == "confirmed"
+    assert person.linkedin_url == "https://linkedin.com/in/janedoe"
+    assert person.identity_confirmed is True
+
+
+def test_apply_resolution_ambiguous_does_not_confirm_identity(session):
+    repo = ChanakyaRunRepository(session)
+    run = repo.create_run("user-a", "2026-11")
+    [company] = repo.upsert_scouted_companies(
+        run.id, "user-a", [{"name": "Acme", "domain": "acme.com", "source_url": "https://acme.com", "fit_score": 1.0}]
+    )
+    [person] = repo.upsert_people(
+        run.id, "user-a", company.id, [{"full_name": "Jane Doe", "role": "CEO", "linkedin_url": None, "confidence": 0.5}]
+    )
+
+    repo.apply_resolution(person, "ambiguous", None, [{"linkedin_url": "a"}, {"linkedin_url": "b"}])
+
+    assert person.resolution_status == "ambiguous"
+    assert person.identity_confirmed is False
+    assert person.linkedin_url is None
+    assert len(person.candidate_profiles) == 2
+
+
+def test_confirm_person_manually_overrides_ambiguous_state(session):
+    repo = ChanakyaRunRepository(session)
+    run = repo.create_run("user-a", "2026-11")
+    [company] = repo.upsert_scouted_companies(
+        run.id, "user-a", [{"name": "Acme", "domain": "acme.com", "source_url": "https://acme.com", "fit_score": 1.0}]
+    )
+    [person] = repo.upsert_people(
+        run.id, "user-a", company.id, [{"full_name": "Jane Doe", "role": "CEO", "linkedin_url": None, "confidence": 0.5}]
+    )
+    repo.apply_resolution(person, "ambiguous", None, [{"linkedin_url": "a"}, {"linkedin_url": "b"}])
+
+    repo.confirm_person_manually(person, "https://linkedin.com/in/janedoe")
+
+    assert person.resolution_status == "confirmed"
+    assert person.identity_confirmed is True
+    assert person.linkedin_url == "https://linkedin.com/in/janedoe"
+
+
 def test_mark_run_status_sets_completed_at(session):
     repo = ChanakyaRunRepository(session)
     run = repo.create_run("user-a", "2026-11")

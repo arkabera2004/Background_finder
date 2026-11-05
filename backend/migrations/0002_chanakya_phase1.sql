@@ -72,6 +72,8 @@ create table if not exists chanakya_people (
     linkedin_url text,
     confidence double precision not null default 0,
     identity_confirmed boolean not null default false,
+    resolution_status text not null default 'pending',
+    candidate_profiles jsonb not null default '[]',
     created_at timestamptz not null default now(),
     unique (run_id, company_id, full_name)
 );

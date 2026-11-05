@@ -72,5 +72,7 @@ def person_to_dict(person: Person) -> dict:
         "linkedin_url": person.linkedin_url,
         "confidence": person.confidence,
         "identity_confirmed": person.identity_confirmed,
+        "resolution_status": person.resolution_status,
+        "candidate_profiles": person.candidate_profiles,
         "created_at": person.created_at.isoformat(),
     }
