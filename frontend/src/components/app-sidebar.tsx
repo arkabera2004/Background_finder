@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, LayoutDashboard, PlusCircle, Settings, Users } from "lucide-react";
+import { Building2, LayoutDashboard, PlusCircle, Settings, Sparkles, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -23,6 +23,7 @@ const NAV = [
   { href: "/research/new", label: "New Research", icon: PlusCircle },
   { href: "/prospects", label: "Prospects", icon: Users },
   { href: "/companies", label: "Companies", icon: Building2 },
+  { href: "/chanakya", label: "Chanakya", icon: Sparkles },
 ];
 
 export function AppSidebar() {

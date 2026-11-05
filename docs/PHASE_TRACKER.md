@@ -449,3 +449,36 @@ six-stage run to completion, and idempotent re-run — all
 `skipped_already_completed`, no duplicate companies/people created).
 Full backend suite: **353 passed** (up from 349). `ruff`/`mypy` both
 0 errors.
+
+## Chanakya Phase 10 (partial) — Frontend
+
+- `frontend/src/lib/chanakya-api.ts`: a Chanakya-specific API client,
+  kept separate from `lib/api.ts` (ProspectLens's single-prospect
+  client) rather than extending it — different product, different
+  types, same separation convention used on the backend.
+- `frontend/src/app/(app)/chanakya/page.tsx`: list monthly runs, create
+  a new one by period.
+- `frontend/src/app/(app)/chanakya/[id]/page.tsx`: a single connected
+  run-detail page — submit the Agent 01 offering/ICP brief, one
+  "Orchestrate run" button driving Agents 02-07 (safe to click again:
+  reuses the backend's idempotent skip/resume), live stage-status
+  badges, and read views for scouted companies, people (with
+  resolution status), email candidates, and QA records including the
+  **human approval buttons** (Approve/Reject) the master prompt
+  requires before any send, plus JSON/CSV export buttons. Every control
+  calls a real backend endpoint — nothing decorative.
+- Sidebar: added a "Chanakya" nav entry.
+- `npx tsc --noEmit` → 0 errors. `npx eslint` on the new files → 0
+  errors (one `react-hooks/set-state-in-effect` false-positive on an
+  initial-load effect, suppressed with a targeted disable comment and a
+  one-line reason, consistent with this rule firing on a pattern other
+  pages in this repo don't happen to trigger). `npm run build` →
+  succeeds, `/chanakya` and `/chanakya/[id]` routes registered.
+
+**Still a gap, not claimed as done**: no catalogue/ICP *editor* (only a
+single-offering quick-add form — multi-offering editing, filters UI,
+and reviewing/versioning past snapshots aren't built), no People
+Finder/LinkedIn Resolver manual-review-queue UI (the backend endpoint
+exists; this page doesn't call it yet), no provider-health/cost
+dashboard, no run-history/audit-trail view, and no Playwright E2E
+coverage for any of these new pages. These remain open Phase 10 work.
