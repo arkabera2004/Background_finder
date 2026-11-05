@@ -7,7 +7,7 @@ imports what it needs from here, never from a sibling agent file.
 
 from fastapi import HTTPException
 
-from app.db.chanakya_models import MonthlyRun, OfferingSnapshot, Person, ScoutedCompany
+from app.db.chanakya_models import EmailCandidate, MonthlyRun, OfferingSnapshot, Person, ScoutedCompany
 from app.db.chanakya_repository import ChanakyaRunRepository
 
 
@@ -75,4 +75,17 @@ def person_to_dict(person: Person) -> dict:
         "resolution_status": person.resolution_status,
         "candidate_profiles": person.candidate_profiles,
         "created_at": person.created_at.isoformat(),
+    }
+
+
+def email_candidate_to_dict(candidate: EmailCandidate) -> dict:
+    return {
+        "id": candidate.id,
+        "run_id": candidate.run_id,
+        "person_id": candidate.person_id,
+        "email": candidate.email,
+        "pattern": candidate.pattern,
+        "verification_status": candidate.verification_status,
+        "confidence": candidate.confidence,
+        "created_at": candidate.created_at.isoformat(),
     }

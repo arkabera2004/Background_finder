@@ -56,6 +56,7 @@ class MonthlyRun(Base):
         back_populates="run", cascade="all, delete-orphan"
     )
     people: Mapped[list["Person"]] = relationship(back_populates="run", cascade="all, delete-orphan")
+    emails: Mapped[list["EmailCandidate"]] = relationship(back_populates="run", cascade="all, delete-orphan")
 
     __table_args__ = (Index("ix_chanakya_runs_owner_period", "owner_id", "period"),)
 
@@ -192,4 +193,34 @@ class Person(Base):
 
     __table_args__ = (
         Index("ix_people_run_company_name", "run_id", "company_id", "full_name", unique=True),
+    )
+
+
+class EmailCandidate(Base):
+    """Agent 05's output: one candidate address for a person, with the
+    pattern that generated it and the verification outcome. `verification_status`
+    is one of "valid" | "rejected" | "needs_review" — "valid" is only ever
+    set by an actual verification provider response, never guessed."""
+
+    __tablename__ = "chanakya_email_candidates"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    owner_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    run_id: Mapped[str] = mapped_column(
+        String, ForeignKey("chanakya_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    person_id: Mapped[str] = mapped_column(
+        String, ForeignKey("chanakya_people.id", ondelete="CASCADE"), nullable=False
+    )
+    email: Mapped[str] = mapped_column(String, nullable=False)
+    pattern: Mapped[str] = mapped_column(String, nullable=False)
+    verification_status: Mapped[str] = mapped_column(String, default="needs_review", nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    run: Mapped[MonthlyRun] = relationship(back_populates="emails")
+    person: Mapped[Person] = relationship()
+
+    __table_args__ = (
+        Index("ix_email_candidates_run_person_email", "run_id", "person_id", "email", unique=True),
     )

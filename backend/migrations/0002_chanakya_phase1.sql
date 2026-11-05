@@ -103,6 +103,19 @@ create policy owner_all on chanakya_evidence for all using (
     exists (select 1 from chanakya_runs r where r.id = chanakya_evidence.run_id and r.owner_id = auth.uid())
 );
 
+create table if not exists chanakya_email_candidates (
+    id uuid primary key default gen_random_uuid(),
+    owner_id uuid not null references auth.users(id) on delete cascade,
+    run_id uuid not null references chanakya_runs(id) on delete cascade,
+    person_id uuid not null references chanakya_people(id) on delete cascade,
+    email text not null,
+    pattern text not null,
+    verification_status text not null default 'needs_review',
+    confidence double precision not null default 0,
+    created_at timestamptz not null default now(),
+    unique (run_id, person_id, email)
+);
+
 alter table chanakya_scouted_companies enable row level security;
 alter table chanakya_people enable row level security;
 
@@ -111,3 +124,7 @@ create policy owner_all on chanakya_scouted_companies for all using (owner_id = 
 
 create policy owner_select on chanakya_people for select using (owner_id = auth.uid());
 create policy owner_all on chanakya_people for all using (owner_id = auth.uid());
+
+alter table chanakya_email_candidates enable row level security;
+create policy owner_select on chanakya_email_candidates for select using (owner_id = auth.uid());
+create policy owner_all on chanakya_email_candidates for all using (owner_id = auth.uid());

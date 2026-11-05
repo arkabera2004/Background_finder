@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     bright_data_api_key: str = Field(default="", validation_alias="BRIGHTDATA_API_KEY")
     pdl_api_key: str = ""
 
+    # Email verification for Agent 05 (Email Hunter). "null" (default) never
+    # claims a candidate address is valid without a real provider configured.
+    email_verification_provider: str = "null"  # null | neverbounce
+    neverbounce_api_key: str = ""
+
     max_runs_per_user_per_day: int = 30
     max_concurrent_runs_per_user: int = 3
     default_retention_days: int = 90

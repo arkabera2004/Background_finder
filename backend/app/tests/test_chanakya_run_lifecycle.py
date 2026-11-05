@@ -236,6 +236,35 @@ def test_confirm_person_manually_overrides_ambiguous_state(session):
     assert person.linkedin_url == "https://linkedin.com/in/janedoe"
 
 
+def test_upsert_email_candidates_dedupes_by_email(session):
+    repo = ChanakyaRunRepository(session)
+    run = repo.create_run("user-a", "2026-11")
+    [company] = repo.upsert_scouted_companies(
+        run.id, "user-a", [{"name": "Acme", "domain": "acme.com", "source_url": "https://acme.com", "fit_score": 1.0}]
+    )
+    [person] = repo.upsert_people(
+        run.id, "user-a", company.id, [{"full_name": "Jane Doe", "role": "CEO", "linkedin_url": None, "confidence": 0.5}]
+    )
+
+    repo.upsert_email_candidates(
+        run.id,
+        "user-a",
+        person.id,
+        [{"email": "jane.doe@acme.com", "pattern": "first.last", "verification_status": "needs_review", "confidence": 0.0}],
+    )
+    updated = repo.upsert_email_candidates(
+        run.id,
+        "user-a",
+        person.id,
+        [{"email": "jane.doe@acme.com", "pattern": "first.last", "verification_status": "valid", "confidence": 0.9}],
+    )
+
+    assert len(updated) == 1
+    assert updated[0].verification_status == "valid"
+    assert len(repo.list_email_candidates(run.id)) == 1
+    assert len(repo.list_email_candidates(run.id, person_id=person.id)) == 1
+
+
 def test_mark_run_status_sets_completed_at(session):
     repo = ChanakyaRunRepository(session)
     run = repo.create_run("user-a", "2026-11")

@@ -2,7 +2,15 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.db.chanakya_models import AgentExecution, Evidence, MonthlyRun, OfferingSnapshot, Person, ScoutedCompany
+from app.db.chanakya_models import (
+    AgentExecution,
+    EmailCandidate,
+    Evidence,
+    MonthlyRun,
+    OfferingSnapshot,
+    Person,
+    ScoutedCompany,
+)
 from app.schemas.chanakya import AgentExecutionStatus, AgentName, RunStatus
 
 
@@ -221,6 +229,47 @@ class ChanakyaRunRepository:
         person.resolution_status = "confirmed"
         self.session.commit()
         return person
+
+    def upsert_email_candidates(
+        self, run_id: str, owner_id: str, person_id: str, candidates: list[dict]
+    ) -> list[EmailCandidate]:
+        """Dedup by (run_id, person_id, email): re-running the hunt for a
+        person updates an existing candidate's verification rather than
+        duplicating it."""
+        existing = {
+            c.email: c
+            for c in self.session.query(EmailCandidate)
+            .filter(EmailCandidate.run_id == run_id, EmailCandidate.person_id == person_id)
+            .all()
+        }
+        result: list[EmailCandidate] = []
+        for candidate in candidates:
+            email = candidate["email"]
+            if email in existing:
+                row = existing[email]
+                row.verification_status = candidate["verification_status"]
+                row.confidence = candidate["confidence"]
+            else:
+                row = EmailCandidate(
+                    owner_id=owner_id,
+                    run_id=run_id,
+                    person_id=person_id,
+                    email=email,
+                    pattern=candidate["pattern"],
+                    verification_status=candidate["verification_status"],
+                    confidence=candidate["confidence"],
+                )
+                self.session.add(row)
+                existing[email] = row
+            result.append(row)
+        self.session.commit()
+        return result
+
+    def list_email_candidates(self, run_id: str, person_id: str | None = None) -> list[EmailCandidate]:
+        query = self.session.query(EmailCandidate).filter(EmailCandidate.run_id == run_id)
+        if person_id:
+            query = query.filter(EmailCandidate.person_id == person_id)
+        return query.order_by(EmailCandidate.confidence.desc()).all()
 
     def mark_run_status(self, run: MonthlyRun, status: RunStatus) -> MonthlyRun:
         run.status = status.value

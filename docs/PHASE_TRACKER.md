@@ -297,3 +297,42 @@ LinkedIn URL rejected, 404 for an unknown person). Full backend suite:
 only — no live search/Clay/browser call; the master prompt's Clay and
 browser-based waterfall tiers ahead of search are not yet implemented
 (documented gap, not claimed as done).
+
+## Chanakya Phase 6 — Email Hunter (Agent 05)
+
+- New provider `app/providers/email_verification_provider.py`, same
+  honesty convention as `search_provider.py`: `NullEmailVerificationProvider`
+  (default) always returns `"unknown"` — it never claims an address is
+  valid without a real check. `NeverBounceProvider` is BLOCKED until
+  `NEVERBOUNCE_API_KEY` is set. `EMAIL_VERIFICATION_PROVIDER`/
+  `NEVERBOUNCE_API_KEY` added to `.env.example`/`Settings`.
+- `app/services/email_hunter.py`: `generate_candidate_emails()` produces
+  the 5 common professional patterns (first.last, firstlast, f.last,
+  flast, first) from a parsed first+last name — returns `[]` for a name
+  that doesn't split into two tokens rather than guessing. `verify_candidates()`
+  maps a provider's real response to policy: `valid`→accepted,
+  `invalid`→`rejected`, `unknown`→`needs_review` (never silently upgraded
+  to valid). `select_best_candidate()` prefers a confirmed valid address,
+  otherwise the best `needs_review` one for a human to check, `None` if
+  every pattern was rejected.
+- New `EmailCandidate` table (`chanakya_email_candidates`, unique on
+  `(run_id, person_id, email)`), FK'd to `Person`. Repository:
+  `upsert_email_candidates()` (dedup by email), `list_email_candidates()`.
+- `POST /chanakya/runs/{id}/email-hunter`: for every `identity_confirmed`
+  person, generates+verifies+persists candidates against their company's
+  domain; 409 if LinkedIn Resolver hasn't confirmed anyone yet. Records
+  `Evidence` for the one best candidate per person (when any clears the
+  rejected bar).
+- `GET /chanakya/runs/{id}/emails?person_id=` — list results.
+
+Tests: 6 service-level (pattern generation incl. empty for a single-token
+name, provider-status→policy mapping incl. unknown→needs_review,
+best-candidate selection incl. all-rejected→None) + 1 repository-level
+(dedup by email) + 3 API-level (409 before confirmed people, full chain
+through Company Scout→People Finder→LinkedIn Resolver→Email Hunter with
+no verifier configured so everything lands in `needs_review` — honestly,
+not faked as verified — and a per-person filter). Full backend suite:
+**334 passed** (up from 324). `ruff`/`mypy` both 0 errors. No live
+NeverBounce call made; the website/contact-page discovery tier ahead of
+pattern-guessing from the master prompt is not yet implemented
+(documented gap).
