@@ -84,7 +84,7 @@ class _OneCandidateSearch(SearchProvider):
     name = "one"
 
     async def search(self, query: str, max_results: int = 10) -> list[SearchResult]:
-        return [SearchResult(url="https://linkedin.com/in/janedoe", title="Jane Doe")]
+        return [SearchResult(url="https://linkedin.com/in/janedoe", title="Jane Doe - Acme fintech")]
 
 
 def _schedule_payload(day_of_month: int = 1) -> dict:

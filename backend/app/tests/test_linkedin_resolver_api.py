@@ -86,7 +86,7 @@ class _OneCandidateSearch(SearchProvider):
     name = "one"
 
     async def search(self, query: str, max_results: int = 10) -> list[SearchResult]:
-        return [SearchResult(url="https://linkedin.com/in/janedoe", title="Jane Doe")]
+        return [SearchResult(url="https://linkedin.com/in/janedoe", title="Jane Doe - Acme fintech")]
 
 
 class _TwoCandidateSearch(SearchProvider):
@@ -94,8 +94,8 @@ class _TwoCandidateSearch(SearchProvider):
 
     async def search(self, query: str, max_results: int = 10) -> list[SearchResult]:
         return [
-            SearchResult(url="https://linkedin.com/in/janedoe", title="Jane Doe A"),
-            SearchResult(url="https://linkedin.com/in/janedoe2", title="Jane Doe B"),
+            SearchResult(url="https://linkedin.com/in/janedoe", title="Jane Doe A - Acme fintech"),
+            SearchResult(url="https://linkedin.com/in/janedoe2", title="Jane Doe B - Acme fintech"),
         ]
 
 
