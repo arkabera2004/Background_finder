@@ -49,6 +49,55 @@ async def test_discover_people_for_company_dedupes_by_name():
     assert all(c["identity_confirmed"] is False for c in candidates)
 
 
+async def test_discover_people_rejects_non_profile_urls():
+    """Regression for the false-positive people found live on run
+    24882912-3ff9-4b78-8d59-be945e636b41: a tracxn.com company directory
+    page, a LinkedIn *post* (not a profile), and an investor-tracking
+    site all surfaced for a role query and were persisted as "people"
+    because only the title shape was checked, never the URL."""
+    results = {
+        '"Acme" CEO linkedin': [
+            # a company directory page, title shaped like a person
+            SearchResult(url="https://tracxn.com/d/companies/cio-connect", title="CIO Connect - CEO - Acme | LinkedIn"),
+            # a LinkedIn post, not a profile
+            SearchResult(
+                url="https://www.linkedin.com/posts/vaiaadvisory_thesis-activity-123",
+                title="India's Late - CEO - Acme | LinkedIn",
+            ),
+            # an unrelated investor-tracking site
+            SearchResult(url="https://signal.nfx.com/investors/tomasz-tunguz", title="Tomasz Tunguz - CEO - Acme"),
+            # the one real result
+            SearchResult(url="https://linkedin.com/in/janedoe", title="Jane Doe - CEO - Acme | LinkedIn"),
+        ],
+    }
+    search = FakeSearchProvider(results)
+
+    candidates = await discover_people_for_company(search, "Acme", roles=["CEO"])
+
+    assert len(candidates) == 1
+    assert candidates[0]["full_name"] == "Jane Doe"
+
+
+async def test_discover_people_rejects_organisation_shaped_names_even_with_a_profile_url():
+    """Defense in depth: even if a result were a linkedin.com/in/ URL, a
+    name containing a whole-word organisation indicator (not a plausible
+    human name component) is rejected — e.g. "Kafum Engineering"."""
+    results = {
+        '"Acme" VP Engineering linkedin': [
+            SearchResult(
+                url="https://linkedin.com/in/kafum-engineering", title="Kafum Engineering - VP Engineering - Acme"
+            ),
+            SearchResult(url="https://linkedin.com/in/realvp", title="Alex Rivera - VP Engineering - Acme"),
+        ],
+    }
+    search = FakeSearchProvider(results)
+
+    candidates = await discover_people_for_company(search, "Acme", roles=["VP Engineering"])
+
+    assert len(candidates) == 1
+    assert candidates[0]["full_name"] == "Alex Rivera"
+
+
 def test_select_leaders_ranks_by_confidence_and_caps():
     candidates = [
         {"full_name": "A", "confidence": 0.3},

@@ -23,6 +23,28 @@ PRIORITY_ROLES = [
 
 _LINKEDIN_TITLE_RE = re.compile(r"^(?P<name>[A-Z][\w.'-]+(?:\s+[A-Z][\w.'-]+){1,3})\s*[-–]\s*\S")
 
+# Whole-word organisation/role-entity indicators — a "name" containing one
+# of these is an organisation, product, or generic label, not a person,
+# even when it happens to pass the capitalized-words-then-dash title shape
+# (e.g. "CIO Connect — CIO", "Kafum Engineering — VP Engineering", both
+# found as false positives in run 24882912-...).
+_ORGANISATION_WORDS = {
+    "connect", "labs", "systems", "engineering", "operating", "energy",
+    "database", "collective", "learning", "materials", "material",
+    "ventures", "capital", "partners", "group", "network", "institute",
+}
+
+
+def is_linkedin_profile_url(url: str) -> bool:
+    """A real personal LinkedIn profile, not a company page, a post, or
+    an unrelated third-party site a search engine happened to surface."""
+    return "linkedin.com/in/" in url
+
+
+def _looks_like_an_organisation(name: str) -> bool:
+    tokens = {t.lower() for t in name.replace("'s", "").split()}
+    return bool(tokens & _ORGANISATION_WORDS)
+
 
 def extract_name_from_result_title(title: str | None) -> str | None:
     """LinkedIn search results title as "First Last - Role - Company | LinkedIn".
@@ -64,8 +86,19 @@ async def discover_people_for_company(
     for role in roles:
         query = f'"{company_name}" {role} linkedin'
         for result in await search.search(query, max_results=max_per_role):
+            if not is_linkedin_profile_url(result.url):
+                # Not a personal profile at all — a company directory page
+                # (tracxn.com, zoominfo.com), a LinkedIn *post* rather than
+                # a profile, an investor-tracking site, etc. Confirmed live
+                # (run 24882912-...): every single false "person" found in
+                # production (an organisation name, a post title, an
+                # article) had a non-profile URL; every genuine person had
+                # a real linkedin.com/in/ URL. Reject outright rather than
+                # scoring it low — a non-profile URL is not weak evidence
+                # of a person, it is proof this result isn't a person.
+                continue
             name = extract_name_from_result_title(result.title)
-            if not name:
+            if not name or _looks_like_an_organisation(name):
                 continue
             key = _normalize_name(name)
             if key in seen:
