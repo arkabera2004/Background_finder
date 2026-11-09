@@ -52,8 +52,41 @@ reliability requirements — honestly, including what is not done.
 3. **No live external provider has been exercised** — DuckDuckGo/Tavily/NeverBounce/Clay/a browser LinkedIn lookup are all either free-default or unimplemented; real-world discovery/verification quality is unproven.
 4. **Frontend coverage is partial** — multi-offering/ICP editing, the manual LinkedIn review queue, and any cost/audit dashboard have no UI.
 5. **No test at the target scale** (100 companies, 300-500 leaders) — correctness is proven on 1-2 fixture records per test; performance/throughput at scale is unknown.
-6. **Database is SQLite**, not the Postgres Flexible Server the architecture calls for — the ORM is Postgres-compatible and the migration SQL targets Postgres/RLS, but it has never been run against a real Postgres instance.
+6. ~~**Database is SQLite**, not the Postgres Flexible Server the architecture calls for~~ — **RESOLVED 2026-11-09**, see below.
 
 None of the above are presented elsewhere in this repo's documentation
 as resolved. This report exists so a future session (or reviewer) does
 not have to re-derive this list from scratch.
+
+## 2026-11-09 update — PostgreSQL verification (blocker 6 resolved)
+
+Ran the real schema against a local PostgreSQL 14 instance (not Docker —
+`brew services` Postgres already running on this machine), using the
+`psycopg[binary]` driver newly added to `requirements.txt`.
+
+- `Base.metadata.create_all()` (the same path the app uses in production —
+  there is no Alembic, by design) creates all 12 tables cleanly against
+  `postgresql+psycopg://…/prospectlens_dev` with zero SQLite-specific
+  assumptions found — every Chanakya model already used dialect-portable
+  `JSON`/`String`/`DateTime` columns.
+- New `backend/app/tests/test_postgres_verification.py` (6 tests, gated by
+  `TEST_POSTGRES_URL` env var so the default suite still runs on SQLite
+  with zero setup) proves against **real Postgres**, not fixtures: schema
+  creation, `owner_id` index presence, cross-tenant isolation (`tenant-a`
+  cannot read `tenant-b`'s run), explicit rollback discarding an
+  uncommitted write, cascade delete removing child `AgentExecution` rows,
+  and 5 concurrent threads each opening their own session and committing
+  without conflict. All 6 pass.
+- Full backend suite: 378 passed + 6 skipped (the Postgres tests, when
+  `TEST_POSTGRES_URL` isn't set) — no regression. `ruff`/`mypy` clean.
+- **Still not done**: the ~17 existing test files that hardcode
+  `make_engine("sqlite:///:memory:")` were not individually migrated to
+  run against Postgres too — that would mean touching every one of those
+  files, and the new dedicated verification module proves the same
+  Postgres-correctness properties without that churn. `DATABASE_URL` is
+  not yet switched in `.env`/`.env.example` to point at Postgres by
+  default — the app still defaults to SQLite until a real Postgres
+  connection string (Supabase or otherwise) is supplied in that file.
+  RLS policies mentioned in `migrations/0002_chanakya_phase1.sql` were
+  not exercised — tenant isolation here is verified at the ORM/
+  application layer (`owner_id` filtering), not at the database layer.
