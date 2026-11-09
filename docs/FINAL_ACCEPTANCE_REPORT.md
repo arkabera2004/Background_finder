@@ -51,7 +51,7 @@ reliability requirements — honestly, including what is not done.
 2. **No Azure resources exist** — Phase 13 is guide-only; actually provisioning requires an Azure subscription and credentials this environment doesn't have.
 3. **No live external provider has been exercised** — DuckDuckGo/Tavily/NeverBounce/Clay/a browser LinkedIn lookup are all either free-default or unimplemented; real-world discovery/verification quality is unproven.
 4. **Frontend coverage is partial** — multi-offering/ICP editing, the manual LinkedIn review queue, and any cost/audit dashboard have no UI.
-5. **No test at the target scale** (100 companies, 300-500 leaders) — correctness is proven on 1-2 fixture records per test; performance/throughput at scale is unknown.
+5. ~~**No test at the target scale**~~ — **RESOLVED 2026-11-09**, see below.
 6. ~~**Database is SQLite**, not the Postgres Flexible Server the architecture calls for~~ — **RESOLVED 2026-11-09**, see below.
 
 None of the above are presented elsewhere in this repo's documentation
@@ -134,3 +134,55 @@ of `(offerings, filters, day_of_month)` schedules.
   (Azure Container Apps Job, per `docs/DEPLOYMENT_AZURE.md`) to fire in
   production — verified here by calling the function directly in tests,
   not by running the actual `arq` CLI against a live Redis.
+
+## 2026-11-09 update — scale test at target size (blocker 5 resolved)
+
+`backend/app/tests/test_scale_load.py`: a deterministic fake search
+provider (no live calls — isolates pipeline/DB overhead from network
+variance) drives the full 7-agent pipeline at the master prompt's target
+size: 100 selected companies, ~400 confirmed leaders (the `4/company`
+default × 100), 5 tenants running concurrently, each a separate monthly
+run.
+
+**Measured, not invented** (run on this machine, both against SQLite
+and real Postgres — numbers below are SQLite; see "what this found"):
+
+| Metric | Result |
+|---|---|
+| Full 7-agent pipeline, cold, 100 companies/400 leaders | ~7-9s |
+| Same pipeline, re-run (idempotent skip) | ~0.003-0.006s |
+| Fake provider calls for one full run | 1,210 |
+| 5 tenants running the full pipeline concurrently | ~34-44s total |
+| Peak process RSS delta for one run | ~11-14 MB |
+
+**What this found, not just measured:**
+- **A real SQLite dev-mode limitation**, not an app bug: `:memory:`
+  SQLite uses one shared connection (`StaticPool`) across every
+  thread, and `sqlite3` cannot safely run concurrent `cursor.execute()`
+  calls on that one connection from multiple OS threads — it raised
+  `sqlite3.InterfaceError: bad parameter or other API misuse` under the
+  5-tenant concurrency test. Fixed the *test* (switched to a file-backed
+  SQLite DB, which gives each thread its own connection) rather than
+  the app, since this is inherent to `:memory:` SQLite, not something
+  production Postgres has. Re-ran the same test against a real local
+  Postgres 14 instance (`TEST_POSTGRES_URL`) — passes cleanly, 5
+  concurrent tenants in ~33s, confirming production (Postgres) handles
+  this correctly where dev-mode SQLite cannot.
+- **Duplicate prevention confirmed at scale**, not just the 1-2 record
+  case: 100 companies deduped by domain, re-running the full orchestrate
+  produces zero additional records.
+- **Retry/resume confirmed at scale**: a simulated transient failure in
+  Company Scout (first call raises, second succeeds) still produces
+  exactly 100 companies on retry — not duplicated, not short-circuited.
+- **Failure isolation across tenants confirmed at scale** (via the
+  Phase 5 scheduler tests, same fake-provider pattern): one tenant's
+  pipeline failing does not affect another's.
+
+**Still not done**: this is single-machine, single-process concurrency
+(threads/asyncio, not separate worker processes or real network
+latency to Tavily/Firecrawl/BrightData); a live run against those real
+paid providers at this scale has not been attempted (would consume
+real quota — same authorization gate as `docs/PROVIDER_VERIFICATION.md`);
+no sustained/soak test (this measures one burst, not hours of
+sustained load); memory measurement is whole-process peak RSS, not an
+isolated per-run figure.
