@@ -17,6 +17,7 @@ from app.api.routers.chanakya import (
     people_finder,
     profile_researcher,
     qa_sync,
+    schedules,
 )
 
 router = APIRouter()
@@ -28,3 +29,4 @@ router.include_router(email_hunter.router)
 router.include_router(profile_researcher.router)
 router.include_router(qa_sync.router)
 router.include_router(orchestrator.router)
+router.include_router(schedules.router)

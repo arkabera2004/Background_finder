@@ -55,14 +55,27 @@ def test_create_run_rate_limited_per_owner_per_day(monkeypatch):
     monkeypatch.setattr(settings, "max_chanakya_runs_per_user_per_day", 2)
     headers = _auth_header()
 
-    client.post("/chanakya/runs", json={"period": "2026-11"}, headers=headers)
-    client.post("/chanakya/runs", json={"period": "2026-11"}, headers=headers)
+    client.post("/chanakya/runs", json={"period": "2026-09"}, headers=headers)
+    client.post("/chanakya/runs", json={"period": "2026-10"}, headers=headers)
     response = client.post("/chanakya/runs", json={"period": "2026-11"}, headers=headers)
 
     assert response.status_code == 429
 
     # a different owner is unaffected by the first owner's limit
     other = client.post("/chanakya/runs", json={"period": "2026-11"}, headers=_auth_header("owner-b"))
+    assert other.status_code == 201
+
+
+def test_create_run_rejects_duplicate_period_for_same_owner():
+    headers = _auth_header("owner-dup")
+    first = client.post("/chanakya/runs", json={"period": "2026-11"}, headers=headers)
+    assert first.status_code == 201
+
+    duplicate = client.post("/chanakya/runs", json={"period": "2026-11"}, headers=headers)
+    assert duplicate.status_code == 409
+
+    # a different owner may still use the same period
+    other = client.post("/chanakya/runs", json={"period": "2026-11"}, headers=_auth_header("owner-dup-2"))
     assert other.status_code == 201
 
 

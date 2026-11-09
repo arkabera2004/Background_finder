@@ -47,7 +47,7 @@ reliability requirements — honestly, including what is not done.
 
 ## Outstanding blockers (in priority order for a next session)
 
-1. **No real queue/scheduler** (Phase 9) — the monthly run is still a manually-triggered HTTP call, not an autonomous Container Apps Job on a schedule.
+1. ~~**No real queue/scheduler**~~ — **RESOLVED 2026-11-09**, see below. Manual HTTP trigger remains available alongside it.
 2. **No Azure resources exist** — Phase 13 is guide-only; actually provisioning requires an Azure subscription and credentials this environment doesn't have.
 3. **No live external provider has been exercised** — DuckDuckGo/Tavily/NeverBounce/Clay/a browser LinkedIn lookup are all either free-default or unimplemented; real-world discovery/verification quality is unproven.
 4. **Frontend coverage is partial** — multi-offering/ICP editing, the manual LinkedIn review queue, and any cost/audit dashboard have no UI.
@@ -90,3 +90,47 @@ Ran the real schema against a local PostgreSQL 14 instance (not Docker —
   RLS policies mentioned in `migrations/0002_chanakya_phase1.sql` were
   not exercised — tenant isolation here is verified at the ORM/
   application layer (`owner_id` filtering), not at the database layer.
+
+## 2026-11-09 update — durable monthly scheduler (blocker 1 resolved)
+
+New `ChanakyaSchedule` model + `/chanakya/schedules` CRUD API + a daily
+ARQ cron (`run_due_chanakya_schedules`, 04:00, alongside the existing
+retention sweep at 03:00 — reuses the ARQ cron infrastructure that was
+already wired for retention, not a new queueing system). Not
+per-tenant-hardcoded: any number of owners can each register any number
+of `(offerings, filters, day_of_month)` schedules.
+
+- **Idempotency / no duplicate runs**: `due_schedules()` only returns a
+  schedule whose `last_run_period` doesn't already equal the current
+  `YYYY-MM`; `ChanakyaRunRepository.get_by_owner_period()` additionally
+  makes `POST /chanakya/runs` itself return 409 on a second run for the
+  same owner+period, closing the gap at the API layer too (previously
+  only an index, not a uniqueness guarantee). New migration
+  `0003_chanakya_phase5_scheduler.sql` adds the matching Postgres unique
+  constraint and RLS policy — `chanakya_runs` had no RLS policy at all
+  until this migration, a pre-existing gap found while doing this work.
+- **Failure isolation**: each due schedule runs in its own try/except;
+  one tenant's exception is recorded on `last_run_error`/`last_run_status`
+  and the loop continues to the next tenant — proven by
+  `test_schedule_failure_is_isolated_from_other_tenants`.
+- **Execution history**: `last_run_period`/`last_run_id`/`last_run_status`/
+  `last_run_error` on the schedule row, plus the full `MonthlyRun` +
+  `AgentExecution` records the run itself always produces — no separate
+  history table needed, the existing provenance model already is one.
+- **Manual trigger still works** — nothing about this touches
+  `POST /chanakya/runs` + `/orchestrate`; schedules are an additional
+  unattended path, not a replacement.
+- 4 new tests (`test_scheduler.py`): CRUD + tenant isolation, rejection
+  validation, a full fake-provider-driven run triggered unattended end
+  to end (proves company/people/email/brief/QA records are all real,
+  not just a 200), and the second-tick-is-a-no-op idempotency check.
+  Full suite: 383 passed, 6 skipped (Postgres-gated), ruff/mypy clean.
+- **Still not done**: no real monitoring/alerting integration (would
+  need Sentry/Slack/PagerDuty — named, not built, since there's no
+  account to wire up); retry/backoff is "try again on tomorrow's cron
+  tick," not an in-run exponential backoff — acceptable for a monthly
+  cadence, not for a tighter SLA; this ARQ cron runs in the worker
+  process, which still needs a real Redis + a running worker deployed
+  (Azure Container Apps Job, per `docs/DEPLOYMENT_AZURE.md`) to fire in
+  production — verified here by calling the function directly in tests,
+  not by running the actual `arq` CLI against a live Redis.

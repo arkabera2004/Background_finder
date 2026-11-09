@@ -132,7 +132,7 @@ def test_cross_owner_cannot_resolve_or_approve_a_person():
 
 
 def test_list_runs_never_leaks_another_owners_runs():
-    client.post("/chanakya/runs", json={"period": "2026-11"}, headers=_auth_header("owner-a"))
+    client.post("/chanakya/runs", json={"period": "2026-10"}, headers=_auth_header("owner-a"))
     client.post("/chanakya/runs", json={"period": "2026-11"}, headers=_auth_header("owner-a"))
     client.post("/chanakya/runs", json={"period": "2026-11"}, headers=_auth_header("owner-b"))
 

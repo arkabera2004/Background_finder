@@ -28,6 +28,10 @@ async def create_run(
                 status_code=429,
                 detail=f"Daily limit of {settings.max_chanakya_runs_per_user_per_day} Chanakya runs exceeded",
             )
+        if repo.get_by_owner_period(user.user_id, payload.period) is not None:
+            raise HTTPException(
+                status_code=409, detail=f"A run for period {payload.period} already exists"
+            )
         run = repo.create_run(user.user_id, payload.period, payload.config)
         return run_to_dict(run)
     finally:

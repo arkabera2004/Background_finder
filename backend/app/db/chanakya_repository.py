@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.db.chanakya_models import (
     AgentExecution,
+    ChanakyaSchedule,
     EmailCandidate,
     Evidence,
     MonthlyRun,
@@ -53,6 +54,13 @@ class ChanakyaRunRepository:
         return (
             self.session.query(MonthlyRun)
             .filter(MonthlyRun.id == run_id, MonthlyRun.owner_id == owner_id)
+            .one_or_none()
+        )
+
+    def get_by_owner_period(self, owner_id: str, period: str) -> MonthlyRun | None:
+        return (
+            self.session.query(MonthlyRun)
+            .filter(MonthlyRun.owner_id == owner_id, MonthlyRun.period == period)
             .one_or_none()
         )
 
@@ -387,3 +395,85 @@ class ChanakyaRunRepository:
             run.completed_at = datetime.now(timezone.utc)
         self.session.commit()
         return run
+
+    # --- Phase 5: schedules ---
+
+    def create_schedule(
+        self,
+        owner_id: str,
+        offerings: list[dict],
+        filters: dict | None = None,
+        config: dict | None = None,
+        day_of_month: int = 1,
+        enabled: bool = True,
+    ) -> ChanakyaSchedule:
+        schedule = ChanakyaSchedule(
+            owner_id=owner_id,
+            offerings=offerings,
+            filters=filters or {},
+            config=config or {},
+            day_of_month=day_of_month,
+            enabled=enabled,
+        )
+        self.session.add(schedule)
+        self.session.commit()
+        return schedule
+
+    def list_schedules_for_owner(self, owner_id: str) -> list[ChanakyaSchedule]:
+        return (
+            self.session.query(ChanakyaSchedule)
+            .filter(ChanakyaSchedule.owner_id == owner_id)
+            .order_by(ChanakyaSchedule.created_at.desc())
+            .all()
+        )
+
+    def get_schedule(self, schedule_id: str, owner_id: str) -> ChanakyaSchedule | None:
+        return (
+            self.session.query(ChanakyaSchedule)
+            .filter(ChanakyaSchedule.id == schedule_id, ChanakyaSchedule.owner_id == owner_id)
+            .one_or_none()
+        )
+
+    def set_schedule_enabled(self, schedule: ChanakyaSchedule, enabled: bool) -> ChanakyaSchedule:
+        schedule.enabled = enabled
+        self.session.commit()
+        return schedule
+
+    def delete_schedule(self, schedule: ChanakyaSchedule) -> None:
+        self.session.delete(schedule)
+        self.session.commit()
+
+    def due_schedules(self, today_day: int, current_period: str) -> list[ChanakyaSchedule]:
+        """Schedules enabled, whose trigger day has arrived this period, and
+        that have not already produced a run for `current_period` — the
+        idempotency guard against duplicate monthly runs on repeated cron
+        ticks within the same month."""
+        from sqlalchemy import or_
+
+        return (
+            self.session.query(ChanakyaSchedule)
+            .filter(
+                ChanakyaSchedule.enabled.is_(True),
+                ChanakyaSchedule.day_of_month <= today_day,
+                or_(
+                    ChanakyaSchedule.last_run_period.is_(None),
+                    ChanakyaSchedule.last_run_period != current_period,
+                ),
+            )
+            .all()
+        )
+
+    def record_schedule_run(
+        self,
+        schedule: ChanakyaSchedule,
+        period: str,
+        run_id: str | None,
+        status: str,
+        error: str | None = None,
+    ) -> ChanakyaSchedule:
+        schedule.last_run_period = period
+        schedule.last_run_id = run_id
+        schedule.last_run_status = status
+        schedule.last_run_error = error
+        self.session.commit()
+        return schedule

@@ -285,3 +285,30 @@ class QARecord(Base):
     person: Mapped[Person] = relationship()
 
     __table_args__ = (Index("ix_qa_records_run_person", "run_id", "person_id", unique=True),)
+
+
+class ChanakyaSchedule(Base):
+    """Phase 5 — a tenant's recurring monthly-run configuration.
+
+    One row per tenant per offering set they want auto-triggered. The
+    daily ARQ cron (`run_due_chanakya_schedules`) scans enabled schedules
+    whose `day_of_month` has passed for the current period and that
+    haven't already produced a run for that period (`last_run_period`),
+    then creates+drives a run unattended. Never hardcodes a tenant or
+    schedule — any number of owners can each have any number of these.
+    """
+
+    __tablename__ = "chanakya_schedules"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    owner_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    day_of_month: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    offerings: Mapped[list] = mapped_column(JSON, nullable=False)  # [OfferingInput.model_dump(), ...]
+    filters: Mapped[dict] = mapped_column(JSON, default=dict)
+    config: Mapped[dict] = mapped_column(JSON, default=dict)  # passed through to MonthlyRun.config
+    last_run_period: Mapped[str | None] = mapped_column(String, nullable=True)
+    last_run_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    last_run_status: Mapped[str | None] = mapped_column(String, nullable=True)
+    last_run_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
