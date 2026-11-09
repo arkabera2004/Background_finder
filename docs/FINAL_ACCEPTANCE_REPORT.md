@@ -50,7 +50,7 @@ reliability requirements — honestly, including what is not done.
 1. ~~**No real queue/scheduler**~~ — **RESOLVED 2026-11-09**, see below. Manual HTTP trigger remains available alongside it.
 2. **No Azure resources exist** — Phase 13 is guide-only; actually provisioning requires an Azure subscription and credentials this environment doesn't have.
 3. **No live external provider has been exercised** — DuckDuckGo/Tavily/NeverBounce/Clay/a browser LinkedIn lookup are all either free-default or unimplemented; real-world discovery/verification quality is unproven.
-4. **Frontend coverage is partial** — multi-offering/ICP editing, the manual LinkedIn review queue, and any cost/audit dashboard have no UI.
+4. **Frontend coverage improved, still partial** — multi-offering submission, the LinkedIn review queue, a schedules UI, and agent retry/error detail were added 2026-11-09 (see below). A cost/audit dashboard remains unbuilt — there is no cost data anywhere in the backend to show (no token/dollar tracking exists for any provider call), so building one now would mean inventing numbers, which the master prompt's own "never fabricate" rule forbids.
 5. ~~**No test at the target scale**~~ — **RESOLVED 2026-11-09**, see below.
 6. ~~**Database is SQLite**, not the Postgres Flexible Server the architecture calls for~~ — **RESOLVED 2026-11-09**, see below.
 
@@ -186,3 +186,43 @@ real quota — same authorization gate as `docs/PROVIDER_VERIFICATION.md`);
 no sustained/soak test (this measures one burst, not hours of
 sustained load); memory measurement is whole-process peak RSS, not an
 isolated per-run figure.
+
+## 2026-11-09 update — frontend gaps closed, browser-verified (blocker 4 progress)
+
+Three dead or missing workflows found and built:
+
+- `listPeopleNeedingReview`/`resolvePersonManually` existed in the API
+  client (`frontend/src/lib/chanakya-api.ts`) but no page ever called
+  them — the LinkedIn identity review queue had a backend endpoint and a
+  typed client method and genuinely no UI. Added to the run detail page:
+  candidate profiles shown, a text field to paste the correct URL, a
+  Confirm button wired to the real endpoint.
+- New `/chanakya/schedules` page for the scheduler backend added earlier
+  this session (CRUD, enable/disable, last-run status/error).
+- Offering brief form only ever supported one offering per submission
+  (hardcoded single-item array) — now supports adding/removing multiple
+  before submitting, matching "multi-offering management" from the
+  master prompt's Phase 3 checklist.
+- Agent execution retry counts and failure error strings now render in
+  the pipeline-stages card, not just a bare status badge.
+
+**Verified in a real browser against the real backend and a real
+Supabase session** (Claude in Chrome, not a mock or a Playwright
+fixture): created a schedule through the UI (`POST /chanakya/schedules`
+→ 201, real DB row confirmed via `sqlite3`), deleted it (`DELETE` → the
+row was gone), and loaded a real existing run's detail page — one
+recovered from a prior session's dev DB, with real DuckDuckGo-sourced
+companies (48, real titles/URLs/fit scores) and people. The new
+retry-count badge correctly showed "People Finder: failed (retry 1)";
+clicking "Orchestrate run" triggered a real retry (`retry_count` went
+1→2 in the database, confirmed via direct query) through the actual
+`--reload` dev backend on port 8010, not a separate/stale process.
+`tsc --noEmit`, `eslint src`, and `npm run build` all clean (0 errors;
+the only warnings are 3 pre-existing ones unrelated to this work).
+
+**Still not done**: cost/audit dashboard (no cost data exists anywhere
+in the backend to show — would require fabricating numbers); the
+browser session was unstable mid-task (the Claude-in-Chrome extension
+disconnected twice), so not every new UI path (e.g. the "Reject" button
+error path, multi-offering removal) was exercised live, only read
+statically and via the passing `tsc`/`eslint`/build checks.
