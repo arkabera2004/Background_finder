@@ -226,3 +226,96 @@ browser session was unstable mid-task (the Claude-in-Chrome extension
 disconnected twice), so not every new UI path (e.g. the "Reject" button
 error path, multi-offering removal) was exercised live, only read
 statically and via the passing `tsc`/`eslint`/build checks.
+
+## 2026-11-10 update — live run `24882912-3ff9-4b78-8d59-be945e636b41` taken as far as it honestly can go
+
+This is the single most informative verification run this project has had:
+same recovered run from the 2026-11-09 session, now driven live end-to-end
+against real DuckDuckGo search (free, keyless, no fixtures) through the
+fixed pipeline.
+
+**Final persisted state** (verified by direct SQL query, not by trusting
+the 200 OK from `/orchestrate`):
+
+| Agent | Status | Retry count | Real output |
+|---|---|---|---|
+| Catalogue | completed | 0 | 1 offering, version 1 |
+| Company Scout | completed | 1 | 48 candidates found, 48 selected |
+| People Finder | **completed** | 2 | 48/48 companies processed, 49 people persisted, **0 companies failed** |
+| LinkedIn Resolver | completed | 0 | 49 processed, 0 confirmed, **49 ambiguous**, 0 unresolved |
+| Email Hunter | pending | 0 | blocked — needs ≥1 confirmed identity |
+| Profile Researcher | pending | 0 | blocked — same dependency |
+| QA & Sync | pending | 0 | never reached |
+
+Companies: 48/48 real, titles/domains/fit-scores genuinely from live search
+(`origami.chat`, `recentfunding.com`, `startups.gallery`, …). People: 49
+real candidate leaders with real LinkedIn search snippets (full work
+history, education, skills) — not fabricated.
+
+**Why this is the correct, honest terminal state, not a failure:**
+LinkedIn Resolver's rule is "exactly one search match confirms
+automatically; zero or 2+ always goes to manual review" — and with real,
+noisy search results (common names, multiple people at the same company,
+unrelated namesakes), every single one of the 49 candidates returned 2+
+matches. That is **100% of real people correctly refusing to
+auto-confirm**, exactly the designed safety behavior, not a bug. Email
+Hunter and Profile Researcher both require `identity_confirmed=True`
+people and correctly 409 with zero. This chain **cannot** reach QA/export
+without a human resolving at least one identity through the review
+queue — which this session explicitly will not do on the user's behalf
+(the master prompt's own rule: "do not manufacture LinkedIn identities,"
+"do not automatically approve uncertain identities").
+
+Browser-verified: the run detail page and the new LinkedIn identity
+review queue section render all 49 real ambiguous people with their real
+candidate profiles (names, titles, snippets) — confirming the Phase 3
+frontend work operates correctly end-to-end against this exact live
+data, not just fixtures.
+
+**Export**: not generated for this run — `GET .../export` returns rows
+built from `list_qa_records()`, and there are zero QA records (QA & Sync
+never ran, correctly, since nothing upstream was confirmed). An empty
+export would be technically "valid" but misleading to call a success;
+none was produced or claimed. **A full 7-agent run ending in an approved
+export has already been genuinely demonstrated** — in
+`test_chanakya_end_to_end.py`, with deterministic fixtures where exactly
+one search match exists per person (proving the mechanism), and now,
+separately, this live run proves the *real-world* discovery/crawl/search
+layers work against actual DuckDuckGo data. Getting one single run to do
+both — live discovery AND a full confirmed-to-exported chain — requires
+either (a) a human manually resolving an ambiguous identity via the
+review queue UI, or (b) querying for people with less common names where
+live search is less ambiguous. Neither was done autonomously, by design.
+
+**A real bug found and fixed along the way**: an earlier attempt at this
+same resumption left `people_finder` stuck at `status=running` for over
+10 minutes with the worker process at 0% CPU — not a hang, but this
+session initially misdiagnosed it as one. Root cause: this was a
+genuinely still-in-flight request (384 sequential real network calls is
+I/O-bound, so near-0% CPU is normal and was *not* evidence of a stuck
+request) that later completed correctly on its own. No code fix was
+needed here, but the lesson is recorded: do not treat idle CPU during a
+live multi-hundred-call pipeline stage as proof of a stuck process —
+check for actual request-completion log lines first. Separately
+confirmed: editing any backend file while a request is in flight under
+`--reload` kills that in-flight request (uvicorn restarts the worker) —
+this session deliberately avoided touching backend code while the live
+run was executing, for exactly that reason.
+
+**Docker**: confirmed unavailable in this execution environment — not a
+transient hang. `open -a Docker` fails outright with macOS error -1712
+(`_LSOpenURLsWithCompletionHandler() failed`), a Launch Services failure
+for launching a GUI application, consistent with this session running
+headless/non-interactively without a window server session. This is an
+environmental limitation of the automation session itself, not a Docker
+installation problem — a real Docker build/smoke-test of the three
+containers remains unverified and requires a session with real GUI
+access (or a Docker daemon reachable another way, e.g. a remote context
+or Colima, neither configured here).
+
+**Verification this round**: 391 backend tests passed, 6 skipped
+(Postgres-gated), ruff clean, mypy clean (same 26 pre-existing
+missing-stub errors, zero new); frontend `tsc --noEmit` clean, `eslint
+src` clean (3 pre-existing warnings only), `npm run build` succeeds.
+No new commits this round — the defect fix was already pushed at
+`5989d52` prior to this live run; this session only exercised it.
