@@ -40,13 +40,21 @@ class TavilyProvider(SearchProvider):
     async def search(self, query: str, max_results: int = 10) -> list[SearchResult]:
         import httpx
 
-        async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.post(
-                "https://api.tavily.com/search",
-                json={"api_key": self.api_key, "query": query, "max_results": max_results},
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        # shortcut: one retry on a transient connect error (observed under rapid
+        # sequential calls against the real API); a real outage still raises.
+        for attempt in range(2):
+            try:
+                async with httpx.AsyncClient(timeout=20) as client:
+                    resp = await client.post(
+                        "https://api.tavily.com/search",
+                        json={"api_key": self.api_key, "query": query, "max_results": max_results},
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                break
+            except httpx.ConnectError:
+                if attempt == 1:
+                    raise
         return [
             SearchResult(url=r["url"], title=r.get("title"), snippet=r.get("content"))
             for r in data.get("results", [])[:max_results]

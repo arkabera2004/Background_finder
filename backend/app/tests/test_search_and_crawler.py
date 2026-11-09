@@ -26,6 +26,10 @@ class _FakeResponse:
     def json(self) -> dict:
         return self._payload
 
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise httpx.HTTPStatusError("error", request=None, response=self)  # type: ignore[arg-type]
+
 
 class _FakeFirecrawlClient:
     """Scripted responses for POST /v1/crawl then GET /v1/crawl/{id}, in
@@ -79,6 +83,48 @@ def test_build_search_provider_tavily_falls_back_to_null_without_key():
 def test_build_search_provider_uses_tavily_when_key_present():
     provider = build_search_provider("tavily", tavily_api_key="key")
     assert isinstance(provider, TavilyProvider)
+
+
+@pytest.mark.asyncio
+async def test_tavily_retries_once_on_connect_error(monkeypatch):
+    calls = {"n": 0}
+
+    class _FlakyClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, *args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise httpx.ConnectError("")
+            return _FakeResponse(200, {"results": [{"url": "https://a.com", "title": "A", "content": "x"}]})
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: _FlakyClient())
+    provider = TavilyProvider(api_key="key")
+    results = await provider.search("query")
+    assert calls["n"] == 2
+    assert results[0].url == "https://a.com"
+
+
+@pytest.mark.asyncio
+async def test_tavily_raises_after_second_connect_error(monkeypatch):
+    class _AlwaysFailsClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, *args, **kwargs):
+            raise httpx.ConnectError("")
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: _AlwaysFailsClient())
+    provider = TavilyProvider(api_key="key")
+    with pytest.raises(httpx.ConnectError):
+        await provider.search("query")
 
 
 def test_build_search_provider_searxng_falls_back_to_null_without_url():
