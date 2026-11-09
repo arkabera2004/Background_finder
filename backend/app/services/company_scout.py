@@ -43,7 +43,7 @@ async def discover_candidates(
             domain = extract_candidate_domain(result.url)
             if not domain or domain in seen_domains:
                 continue
-            if not is_operating_company_page(result.url, result.title):
+            if not is_operating_company_page(result.url, result.title, result.snippet):
                 # A media/listicle/directory page about the industry in
                 # general, not a specific operating company's own site —
                 # confirmed live (run 24882912-...): 48/48 "companies"

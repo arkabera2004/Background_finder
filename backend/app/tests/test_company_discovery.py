@@ -232,3 +232,12 @@ def test_is_operating_company_page_rejects_media_and_listicle_pages(url, title):
 def test_is_operating_company_page_accepts_a_real_company_homepage():
     assert is_operating_company_page("https://acmefintech.com", "Acme Fintech — Series B payments infrastructure") is True
     assert is_operating_company_page("https://acmefintech.com/about", "About Acme Fintech") is True
+
+
+def test_is_operating_company_page_rejects_a_venture_capital_firm():
+    """Regression: fintech.io ("FinTech Collective") passed every other
+    check live and was selected as a "Series B fintech company" — it is
+    actually the venture capital firm investing in such companies."""
+    assert is_operating_company_page(
+        "https://fintech.io", "FinTech Collective", "An early-stage investor in fintech startups."
+    ) is False

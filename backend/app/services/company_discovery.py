@@ -85,20 +85,34 @@ _LISTICLE_TITLE_RE = re.compile(
     re.I,
 )
 
+# A venture capital / investment firm is not an operating company and is
+# not itself a Series B-funded startup, even when its own site passes
+# every other check (confirmed live: fintech.io, "FinTech Collective",
+# an investor — not a portfolio company — slipped through as a
+# "qualified" Series B fintech company).
+_VC_FIRM_RE = re.compile(
+    r"\b(venture capital|venture partners|early[- ]stage investor|"
+    r"invests? in startups|our portfolio compan)\b",
+    re.I,
+)
 
-def is_operating_company_page(url: str, title: str | None) -> bool:
+
+def is_operating_company_page(url: str, title: str | None, snippet: str | None = None) -> bool:
     """True only for a page that plausibly IS a specific operating
-    company's own site — not an article, directory, glossary, or listing
-    about companies in general. Deterministic and conservative: when in
-    doubt, reject rather than let an unverified page through as a
-    "qualified" company."""
+    company's own site — not an article, directory, glossary, VC firm,
+    or listing about companies in general. Deterministic and
+    conservative: when in doubt, reject rather than let an unverified
+    page through as a "qualified" company."""
     parsed = urlparse(url)
     hostname = parsed.netloc.lower().removeprefix("www.")
     if any(hostname == d or hostname.endswith(f".{d}") for d in _MEDIA_AND_LISTICLE_DOMAINS):
         return False
     if parsed.query or _NON_HOMEPAGE_PATH_RE.search(parsed.path):
         return False
+    text = f"{title or ''} {snippet or ''}"
     if title and _LISTICLE_TITLE_RE.search(title):
+        return False
+    if _VC_FIRM_RE.search(text):
         return False
     return True
 
