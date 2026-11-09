@@ -110,6 +110,60 @@ async def test_discover_candidates_raises_when_every_query_fails(monkeypatch):
         )
 
 
+@pytest.mark.asyncio
+async def test_discover_candidates_rejects_media_listicles_and_directories(monkeypatch):
+    """Regression for run 24882912-3ff9-4b78-8d59-be945e636b41: a bare
+    "companies fintech Series B" search returned 48 results and every
+    single one was a listicle, glossary, or directory page about the
+    industry — zero were an actual operating company's own site. These
+    are real examples from that run's persisted data."""
+    from app.services import company_discovery
+
+    monkeypatch.setattr(company_discovery, "_is_safe_host", lambda hostname: True)
+
+    results = {
+        "companies fintech Series B": [
+            SearchResult(url="https://builtin.com/articles/fintech-companies-startups-to-know", title="106 Fintech Companies and Startups to Know | Built In"),
+            SearchResult(url="https://www.dearstage2.com/p/what-it-takes-to-raise-a-series-b", title="What It Takes to Raise a Series B Today"),
+            SearchResult(url="https://craft.co/fintech-companies?page=2", title="Fintech companies | Craft.co"),
+            SearchResult(url="https://www.entrepreneurscollective.biz/glossary/series-b", title="Series B - Entrepreneurs Collective"),
+            # the one real operating company's own homepage
+            SearchResult(url="https://acmefintech.com", title="Acme Fintech — Series B payments infrastructure"),
+        ],
+    }
+    search = FakeSearchProvider(results)
+
+    candidates = await discover_candidates(
+        search, offerings=[{"icp_criteria": ["Series B"]}], filters={"industries": ["fintech"]}
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0]["domain"] == "acmefintech.com"
+
+
+@pytest.mark.asyncio
+async def test_discover_candidates_includes_geography_in_query(monkeypatch):
+    from app.services import company_discovery
+
+    monkeypatch.setattr(company_discovery, "_is_safe_host", lambda hostname: True)
+    captured_queries = []
+
+    class _CapturingProvider(SearchProvider):
+        name = "capturing"
+
+        async def search(self, query, max_results=10):
+            captured_queries.append(query)
+            return []
+
+    await discover_candidates(
+        _CapturingProvider(),
+        offerings=[{"icp_criteria": ["Series B"]}],
+        filters={"industries": ["fintech"], "geography": ["India"]},
+    )
+
+    assert captured_queries == ["companies fintech India Series B"]
+
+
 def test_select_top_companies_ranks_by_fit_score():
     candidates = [
         {"name": "A", "domain": "a.com", "source_url": "https://a.com", "fit_score": 0.2},

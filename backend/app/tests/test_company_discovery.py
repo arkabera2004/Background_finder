@@ -2,7 +2,7 @@ import pytest
 
 from app.providers.search_provider import SearchProvider, SearchResult
 from app.services import company_discovery
-from app.services.company_discovery import discover_company_domain
+from app.services.company_discovery import discover_company_domain, is_operating_company_page
 
 
 class FakeSearchProvider(SearchProvider):
@@ -212,3 +212,23 @@ async def test_discover_company_domain_rejects_dns_resolution_failure(monkeypatc
     domain = await discover_company_domain(search, "Acme Robotics")
 
     assert domain is None
+
+
+@pytest.mark.parametrize(
+    "url,title",
+    [
+        ("https://builtin.com/articles/fintech-companies-startups-to-know", "106 Fintech Companies and Startups to Know"),
+        ("https://www.dearstage2.com/p/what-it-takes-to-raise-a-series-b", "What It Takes to Raise a Series B Today"),
+        ("https://craft.co/fintech-companies?page=2", "Fintech companies | Craft.co"),
+        ("https://www.entrepreneurscollective.biz/glossary/series-b", "Series B - Entrepreneurs Collective"),
+        ("https://someblog.example.com/news/top-10-fintech-startups-in-india", "Top 10 Fintech Startups in India"),
+        ("https://unrelated.example.com/search?q=fintech", "Search results for fintech"),
+    ],
+)
+def test_is_operating_company_page_rejects_media_and_listicle_pages(url, title):
+    assert is_operating_company_page(url, title) is False
+
+
+def test_is_operating_company_page_accepts_a_real_company_homepage():
+    assert is_operating_company_page("https://acmefintech.com", "Acme Fintech — Series B payments infrastructure") is True
+    assert is_operating_company_page("https://acmefintech.com/about", "About Acme Fintech") is True

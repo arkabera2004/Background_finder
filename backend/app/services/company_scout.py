@@ -6,7 +6,7 @@ judgement about a company it hasn't actually read anything about.
 """
 
 from app.providers.search_provider import SearchProvider
-from app.services.company_discovery import extract_candidate_domain
+from app.services.company_discovery import extract_candidate_domain, is_operating_company_page
 
 
 def score_fit(icp_criteria: list[str], title: str | None, snippet: str | None) -> float:
@@ -25,9 +25,10 @@ async def discover_candidates(
     Returns unpersisted candidate dicts — the caller decides what to keep."""
     icp_criteria = [c for o in offerings for c in o.get("icp_criteria", [])]
     industries = filters.get("industries", [])
+    geography = filters.get("geography", [])
     queries = [
-        " ".join(part for part in ["companies", *industries, c] if part) for c in icp_criteria
-    ] or [" ".join(part for part in ["companies", *industries] if part)]
+        " ".join(part for part in ["companies", *industries, *geography, c] if part) for c in icp_criteria
+    ] or [" ".join(part for part in ["companies", *industries, *geography] if part)]
 
     seen_domains: set[str] = set()
     candidates: list[dict] = []
@@ -41,6 +42,12 @@ async def discover_candidates(
         for result in results:
             domain = extract_candidate_domain(result.url)
             if not domain or domain in seen_domains:
+                continue
+            if not is_operating_company_page(result.url, result.title):
+                # A media/listicle/directory page about the industry in
+                # general, not a specific operating company's own site —
+                # confirmed live (run 24882912-...): 48/48 "companies"
+                # selected before this check were exactly this.
                 continue
             seen_domains.add(domain)
             candidates.append(

@@ -38,7 +38,69 @@ _AGGREGATOR_DOMAINS = {
     "wikipedia.org",
     "signalhire.com",
     "wellfound.com",
+    "tracxn.com",
+    "craft.co",
+    "ensun.io",
+    "globaldatabase.com",
 }
+
+# Media/publisher/listicle/glossary sites: these run entire sections of
+# "Top N fintech companies" or "what is Series B" content, and a bare
+# keyword search ("companies fintech Series B") ranks that content highly
+# — but a listicle *about* an industry is not itself an operating company.
+# Confirmed live (run 24882912-...): every one of 48 "companies" company
+# scout selected was a page on one of these domains, zero were an actual
+# company's own homepage.
+_MEDIA_AND_LISTICLE_DOMAINS = {
+    "builtin.com", "builtinnyc.com", "forbes.com", "techcrunch.com",
+    "businessinsider.com", "medium.com", "reddit.com", "quora.com",
+    "hubspot.com", "ibm.com", "investmentnews.com", "itchronicles.com",
+    "startupsavant.com", "techslang.com", "topstartups.io", "vault.com",
+    "wallstreetmojo.com", "work-schedule.net", "pilot.com", "plaid.com",
+    "startups.gallery", "vcbacked.co", "aletheiaai.in", "datocapital.uk",
+    "dearstage2.com", "employbl.com", "engineerbabu.com",
+    "entrepreneurscollective.biz", "finance.yahoo.com",
+    "find-and-update.company-information.service.gov.uk", "fintechly.com",
+    "fundraiseinsider.com", "imarticus.org", "johngauch.com",
+    "lowercarbon.com", "pipelineroad.com", "projectstartups.com",
+    "protecrea.org", "purpose.jobs", "recentfunding.com", "refolk.ai",
+    "seedtable.com", "startups.com", "uk.globaldatabase.com",
+    "origami.chat", "ccstartup.com",
+}
+
+# A real operating company's own homepage/about page has a shallow URL
+# path. A listicle, blog post, glossary entry, or directory search result
+# almost always lives several segments deep, or carries query params for
+# pagination/filtering (?page=2). This catches listicle pages on domains
+# not already in the blocklist above (the blocklist can't be exhaustive).
+_NON_HOMEPAGE_PATH_RE = re.compile(
+    r"/(blog|articles?|news|glossary|guide|search|companies|startups|posts?)(/|$|\?)", re.I
+)
+
+# Headline/listicle phrasing — a page *about* a market segment, not a
+# specific company's own site, even when the URL path looks shallow.
+_LISTICLE_TITLE_RE = re.compile(
+    r"\b(top \d|top\s+\w+\s+fintech|best\s|\d+\s+(fintech|startups?|companies)|"
+    r"what is|guide to|definition|vs\.?\s|list of|companies in|startups in)\b",
+    re.I,
+)
+
+
+def is_operating_company_page(url: str, title: str | None) -> bool:
+    """True only for a page that plausibly IS a specific operating
+    company's own site — not an article, directory, glossary, or listing
+    about companies in general. Deterministic and conservative: when in
+    doubt, reject rather than let an unverified page through as a
+    "qualified" company."""
+    parsed = urlparse(url)
+    hostname = parsed.netloc.lower().removeprefix("www.")
+    if any(hostname == d or hostname.endswith(f".{d}") for d in _MEDIA_AND_LISTICLE_DOMAINS):
+        return False
+    if parsed.query or _NON_HOMEPAGE_PATH_RE.search(parsed.path):
+        return False
+    if title and _LISTICLE_TITLE_RE.search(title):
+        return False
+    return True
 
 # Generic business words that don't distinguish one company from another —
 # a match on only these would confidently crawl the wrong company's site.
