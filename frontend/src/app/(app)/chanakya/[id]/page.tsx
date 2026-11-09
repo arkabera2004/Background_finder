@@ -12,6 +12,7 @@ import {
   chanakyaApi,
   type EmailCandidateView,
   type MonthlyRun,
+  type OfferingInput,
   type PersonView,
   type QARecordView,
   type ScoutedCompanyView,
@@ -42,6 +43,9 @@ export default function ChanakyaRunDetailPage() {
   const [people, setPeople] = useState<PersonView[]>([]);
   const [emails, setEmails] = useState<EmailCandidateView[]>([]);
   const [qaRecords, setQaRecords] = useState<QARecordView[]>([]);
+  const [needsReview, setNeedsReview] = useState<PersonView[]>([]);
+  const [resolveUrls, setResolveUrls] = useState<Record<string, string>>({});
+  const [offerings, setOfferings] = useState<OfferingInput[]>([]);
   const [offeringName, setOfferingName] = useState("");
   const [icpCriteria, setIcpCriteria] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -51,16 +55,18 @@ export default function ChanakyaRunDetailPage() {
     try {
       const r = await chanakyaApi.getRun(runId);
       setRun(r);
-      const [c, p, e, q] = await Promise.all([
+      const [c, p, e, q, nr] = await Promise.all([
         chanakyaApi.listCompanies(runId).catch(() => []),
         chanakyaApi.listPeople(runId).catch(() => []),
         chanakyaApi.listEmails(runId).catch(() => []),
         chanakyaApi.listQaRecords(runId).catch(() => []),
+        chanakyaApi.listPeopleNeedingReview(runId).catch(() => []),
       ]);
       setCompanies(c);
       setPeople(p);
       setEmails(e);
       setQaRecords(q);
+      setNeedsReview(nr);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load run");
     }
@@ -72,24 +78,50 @@ export default function ChanakyaRunDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId]);
 
+  const handleAddOfferingRow = () => {
+    if (!offeringName.trim()) return;
+    setOfferings((prev) => [
+      ...prev.filter((o) => o.name.trim()),
+      {
+        name: offeringName,
+        icp_criteria: icpCriteria
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      },
+    ]);
+    setOfferingName("");
+    setIcpCriteria("");
+  };
+
+  const handleRemoveOfferingRow = (index: number) => {
+    setOfferings((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmitOffering = async () => {
+    const toSubmit = offerings.filter((o) => o.name.trim());
+    if (toSubmit.length === 0) return;
     setBusy(true);
     setError(null);
     try {
-      await chanakyaApi.submitOfferings(runId, [
-        {
-          name: offeringName,
-          icp_criteria: icpCriteria
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean),
-        },
-      ]);
+      await chanakyaApi.submitOfferings(runId, toSubmit);
       await loadAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit offering brief");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleResolveManually = async (personId: string) => {
+    const url = resolveUrls[personId];
+    if (!url) return;
+    setError(null);
+    try {
+      await chanakyaApi.resolvePersonManually(runId, personId, url);
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to resolve identity");
     }
   };
 
@@ -146,13 +178,42 @@ export default function ChanakyaRunDetailPage() {
           {run.agent_executions.map((e) => (
             <Badge key={e.agent_name} variant={statusVariant(e.status)}>
               {STAGE_LABELS[e.agent_name] ?? e.agent_name}: {e.status}
+              {e.retry_count > 0 ? ` (retry ${e.retry_count})` : ""}
             </Badge>
           ))}
         </div>
+        {run.agent_executions
+          .filter((e) => e.error)
+          .map((e) => (
+            <p key={e.agent_name} className="mt-2 text-xs text-red-600">
+              {STAGE_LABELS[e.agent_name] ?? e.agent_name}: {e.error}
+            </p>
+          ))}
       </Card>
 
       <Card className="space-y-3 p-4">
         <h2 className="font-medium">1. Offering + ICP brief (Agent 01)</h2>
+        <p className="text-sm text-gray-600">
+          Multiple offerings may be submitted together — Company Scout searches once per ICP criterion
+          across all of them. Each submission creates a new version; prior versions are never overwritten.
+        </p>
+        {offerings.filter((o) => o.name.trim()).length > 0 && (
+          <div className="space-y-1">
+            {offerings
+              .filter((o) => o.name.trim())
+              .map((o, i) => (
+                <div key={`${o.name}-${i}`} className="flex items-center justify-between rounded border px-3 py-1 text-sm">
+                  <span>
+                    {o.name}
+                    {o.icp_criteria && o.icp_criteria.length > 0 ? ` — ${o.icp_criteria.join(", ")}` : ""}
+                  </span>
+                  <Button variant="outline" size="sm" onClick={() => handleRemoveOfferingRow(i)}>
+                    Remove
+                  </Button>
+                </div>
+              ))}
+          </div>
+        )}
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
             <Label htmlFor="offering-name">Offering name</Label>
@@ -174,7 +235,13 @@ export default function ChanakyaRunDetailPage() {
               className="w-64"
             />
           </div>
-          <Button onClick={handleSubmitOffering} disabled={busy || !offeringName}>
+          <Button variant="outline" onClick={handleAddOfferingRow} disabled={!offeringName}>
+            Add offering
+          </Button>
+          <Button
+            onClick={handleSubmitOffering}
+            disabled={busy || offerings.filter((o) => o.name.trim()).length === 0}
+          >
             Submit brief
           </Button>
         </div>
@@ -217,6 +284,57 @@ export default function ChanakyaRunDetailPage() {
                   {p.full_name} — {p.role}
                 </span>
                 <Badge variant={p.identity_confirmed ? "default" : "secondary"}>{p.resolution_status}</Badge>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {needsReview.length > 0 && (
+        <Card className="space-y-3 p-4">
+          <h2 className="font-medium">LinkedIn identity review queue ({needsReview.length})</h2>
+          <p className="text-sm text-gray-600">
+            Zero or multiple search matches — Agent 04 could not confirm automatically. Review the
+            candidate profiles found and paste the correct LinkedIn URL, or leave unresolved.
+          </p>
+          <div className="space-y-3">
+            {needsReview.map((person) => (
+              <div key={person.id} className="rounded-lg border p-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">
+                    {person.full_name} — {person.role}
+                  </span>
+                  <Badge variant="secondary">{person.resolution_status}</Badge>
+                </div>
+                {person.candidate_profiles.length > 0 && (
+                  <ul className="mt-2 space-y-1 text-sm text-gray-600">
+                    {person.candidate_profiles.map((c) => (
+                      <li key={c.linkedin_url}>
+                        <a
+                          href={c.linkedin_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          {c.title ?? c.linkedin_url}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-2 flex items-end gap-2">
+                  <Input
+                    placeholder="https://linkedin.com/in/correct-profile"
+                    value={resolveUrls[person.id] ?? ""}
+                    onChange={(e) =>
+                      setResolveUrls((prev) => ({ ...prev, [person.id]: e.target.value }))
+                    }
+                    className="w-80"
+                  />
+                  <Button size="sm" onClick={() => handleResolveManually(person.id)}>
+                    Confirm
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

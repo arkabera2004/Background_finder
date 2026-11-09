@@ -52,7 +52,14 @@ export default function ChanakyaPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-display tracking-tight">Chanakya — Monthly Runs</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-display tracking-tight">Chanakya — Monthly Runs</h1>
+        <Link href="/chanakya/schedules">
+          <Button variant="outline" size="sm">
+            Manage schedules
+          </Button>
+        </Link>
+      </div>
 
       <Card className="flex items-end gap-3 p-4">
         <div className="space-y-1">

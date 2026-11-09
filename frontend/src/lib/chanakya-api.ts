@@ -28,6 +28,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
   if (!res.ok) throw new ChanakyaApiError(res.status, await res.text());
+  if (res.status === 204) return undefined as T;
   return res.json();
 }
 
@@ -134,6 +135,20 @@ export interface OrchestrateResult {
   stopped_at: AgentName | null;
 }
 
+export interface ChanakyaSchedule {
+  id: string;
+  enabled: boolean;
+  day_of_month: number;
+  offerings: OfferingInput[];
+  filters: Record<string, unknown>;
+  config: Record<string, unknown>;
+  last_run_period: string | null;
+  last_run_id: string | null;
+  last_run_status: string | null;
+  last_run_error: string | null;
+  created_at: string;
+}
+
 export const chanakyaApi = {
   listRuns: () => request<MonthlyRun[]>("/chanakya/runs"),
   getRun: (runId: string) => request<MonthlyRun>(`/chanakya/runs/${runId}`),
@@ -168,6 +183,25 @@ export const chanakyaApi = {
       method: "POST",
       body: JSON.stringify({ approve }),
     }),
+  listSchedules: () => request<ChanakyaSchedule[]>("/chanakya/schedules"),
+  createSchedule: (payload: {
+    offerings: OfferingInput[];
+    filters?: Record<string, unknown>;
+    config?: Record<string, unknown>;
+    day_of_month?: number;
+    enabled?: boolean;
+  }) =>
+    request<ChanakyaSchedule>("/chanakya/schedules", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  setScheduleEnabled: (scheduleId: string, enabled: boolean) =>
+    request<ChanakyaSchedule>(`/chanakya/schedules/${scheduleId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled }),
+    }),
+  deleteSchedule: (scheduleId: string) =>
+    request<void>(`/chanakya/schedules/${scheduleId}`, { method: "DELETE" }),
   exportBlobUrl: async (runId: string, format: "json" | "csv") => {
     const supabase = createClient();
     const { data } = await supabase.auth.getSession();
