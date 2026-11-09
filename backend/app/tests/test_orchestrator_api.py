@@ -161,3 +161,64 @@ def test_orchestrate_is_idempotent_on_rerun(monkeypatch):
     # re-running didn't duplicate any companies/people/emails
     assert len(client.get(f"/chanakya/runs/{run['id']}/companies", headers=headers).json()) == 1
     assert len(client.get(f"/chanakya/runs/{run['id']}/people", headers=headers).json()) == 1
+
+
+class _TwoCompanyScoutProvider(SearchProvider):
+    name = "two-company-scout"
+
+    async def search(self, query: str, max_results: int = 10) -> list[SearchResult]:
+        return [
+            SearchResult(url="https://good-co.com/about", title="GoodCo fintech", snippet="fintech"),
+            SearchResult(url="https://bad-co.com/about", title="BadCo fintech", snippet="fintech"),
+        ]
+
+
+class _OneCompanyFailsPeopleProvider(SearchProvider):
+    """BadCo's queries always fail (simulating e.g. the real "no results"
+    bug found 2026-11-10 on run 24882912-3ff9-4b78-8d59-be945e636b41);
+    GoodCo's succeed."""
+
+    name = "one-company-fails"
+
+    async def search(self, query: str, max_results: int = 10) -> list[SearchResult]:
+        if "BadCo" in query:
+            raise RuntimeError("DuckDuckGo search failed: No results found.")
+        return [SearchResult(url="https://linkedin.com/in/janedoe", title="Jane Doe - CEO - GoodCo | LinkedIn")]
+
+
+def test_people_finder_survives_one_companys_search_failure(monkeypatch):
+    """Regression for the real People Finder failure found 2026-11-10:
+    one company's search provider call raising must not fail the whole
+    stage/run — the other companies' people must still be found and
+    persisted, and the agent must complete, not fail."""
+    from app.api.routers.chanakya import company_scout as company_scout_router
+    from app.api.routers.chanakya import people_finder as people_finder_router
+
+    monkeypatch.setattr("app.services.company_discovery._is_safe_host", lambda hostname: True)
+    monkeypatch.setattr(company_scout_router, "build_search_provider", lambda *a, **k: _TwoCompanyScoutProvider())
+    monkeypatch.setattr(
+        people_finder_router, "build_search_provider", lambda *a, **k: _OneCompanyFailsPeopleProvider()
+    )
+
+    headers = _auth_header()
+    run = client.post("/chanakya/runs", json={"period": "2026-11"}, headers=headers).json()
+    client.post(
+        f"/chanakya/runs/{run['id']}/offerings",
+        json={"offerings": [{"name": "GenAI Accelerator", "icp_criteria": ["fintech"]}]},
+        headers=headers,
+    )
+    client.post(f"/chanakya/runs/{run['id']}/company-scout", headers=headers)
+
+    response = client.post(f"/chanakya/runs/{run['id']}/people-finder", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["people"]) == 1
+    assert body["people"][0]["full_name"] == "Jane Doe"
+
+    run_detail = client.get(f"/chanakya/runs/{run['id']}", headers=headers).json()
+    people_finder_execution = next(
+        e for e in run_detail["agent_executions"] if e["agent_name"] == "people_finder"
+    )
+    assert people_finder_execution["status"] == "completed"
+    assert people_finder_execution["output_summary"]["companies_failed"] == 1

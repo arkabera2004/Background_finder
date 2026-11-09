@@ -152,6 +152,58 @@ async def test_duckduckgo_search_is_live_and_returns_real_urls():
     assert all(r.url.startswith("http") for r in results)
 
 
+@pytest.mark.asyncio
+async def test_duckduckgo_no_results_returns_empty_list_not_an_exception(monkeypatch):
+    """Regression for a real bug found 2026-11-10: ddgs.text() raises
+    DDGSException("No results found.") for a query with zero matches —
+    not only on a genuine transport failure. Before this fix, that
+    crashed the whole People Finder/Company Scout stage on a single
+    company/role combination with no matches, which is near-guaranteed
+    across dozens of companies — this is exactly what happened on run
+    24882912-3ff9-4b78-8d59-be945e636b41."""
+    from ddgs.exceptions import DDGSException
+
+    class _NoResultsDDGS:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def text(self, query, max_results=10):
+            raise DDGSException("No results found.")
+
+    monkeypatch.setattr("ddgs.DDGS", lambda *a, **k: _NoResultsDDGS())
+    provider = DuckDuckGoProvider()
+    results = await provider.search("a query with no matches")
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_duckduckgo_real_failure_still_raises_with_a_non_empty_message(monkeypatch):
+    """A genuine transport/rate-limit failure must still raise — and the
+    message must never be empty, even if the underlying exception's
+    str() is empty, so a failure can never be silently recorded as ''."""
+    from ddgs.exceptions import RatelimitException
+
+    class _RatelimitedDDGS:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def text(self, query, max_results=10):
+            raise RatelimitException()  # empty message, as the real library allows
+
+    monkeypatch.setattr("ddgs.DDGS", lambda *a, **k: _RatelimitedDDGS())
+    provider = DuckDuckGoProvider()
+    with pytest.raises(RuntimeError) as exc_info:
+        await provider.search("query")
+    assert str(exc_info.value).strip() != "DuckDuckGo search failed:"
+    assert "RatelimitException" in str(exc_info.value)
+
+
 def test_build_crawler_defaults_to_local_extraction():
     crawler = build_company_crawler("local")
     assert isinstance(crawler, LocalExtractionCrawler)

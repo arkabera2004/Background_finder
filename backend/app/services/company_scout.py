@@ -31,8 +31,14 @@ async def discover_candidates(
 
     seen_domains: set[str] = set()
     candidates: list[dict] = []
+    failed_queries = 0
     for query in queries:
-        for result in await search.search(query, max_results=max_search_results):
+        try:
+            results = await search.search(query, max_results=max_search_results)
+        except Exception:  # noqa: BLE001 - one bad query must not sink the whole discovery
+            failed_queries += 1
+            continue
+        for result in results:
             domain = extract_candidate_domain(result.url)
             if not domain or domain in seen_domains:
                 continue
@@ -45,6 +51,8 @@ async def discover_candidates(
                     "fit_score": score_fit(icp_criteria, result.title, result.snippet),
                 }
             )
+    if failed_queries and failed_queries == len(queries):
+        raise RuntimeError(f"all {len(queries)} discovery queries failed")
     return candidates
 
 

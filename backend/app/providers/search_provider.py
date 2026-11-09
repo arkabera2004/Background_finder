@@ -76,15 +76,30 @@ class DuckDuckGoProvider(SearchProvider):
         import asyncio
 
         from ddgs import DDGS
+        from ddgs.exceptions import DDGSException
 
         def _run() -> list[dict]:
-            with DDGS() as ddgs:
+            with DDGS(timeout=15) as ddgs:
                 return list(ddgs.text(query, max_results=max_results))
 
         try:
-            raw = await asyncio.to_thread(_run)
+            raw = await asyncio.wait_for(asyncio.to_thread(_run), timeout=20)
+        except DDGSException as exc:
+            # ddgs raises on a genuinely empty result set too ("No results
+            # found."), not only on a transport failure — that case is a
+            # correct, truthful empty list, not an error. Only re-raise
+            # when the message indicates an actual failure (rate limit,
+            # timeout, network/HTML-parsing error), matching this
+            # provider's documented "never raises on 'no results'" contract.
+            message = str(exc) or type(exc).__name__
+            if "no results found" in message.lower():
+                return []
+            raise RuntimeError(f"DuckDuckGo search failed: {message}") from exc
+        except TimeoutError as exc:
+            raise RuntimeError(f"DuckDuckGo search timed out after 20s: {query!r}") from exc
         except Exception as exc:  # noqa: BLE001 - ddgs has no stable exception hierarchy
-            raise RuntimeError(f"DuckDuckGo search failed: {exc}") from exc
+            message = str(exc) or type(exc).__name__
+            raise RuntimeError(f"DuckDuckGo search failed: {message}") from exc
 
         return [
             SearchResult(url=r.get("href", ""), title=r.get("title"), snippet=r.get("body"))

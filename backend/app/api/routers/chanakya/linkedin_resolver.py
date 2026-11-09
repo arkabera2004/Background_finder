@@ -62,7 +62,7 @@ async def run_linkedin_resolver(run_id: str, user: AuthenticatedUser = Depends(g
                 else:
                     unresolved += 1
         except Exception as exc:  # noqa: BLE001 - record and re-raise as a clean 502
-            repo.fail_agent(run_id, AgentName.LINKEDIN_RESOLVER, str(exc))
+            repo.fail_agent(run_id, AgentName.LINKEDIN_RESOLVER, f"{type(exc).__name__}: {exc}")
             raise HTTPException(status_code=502, detail=f"LinkedIn Resolver failed: {exc}") from exc
 
         repo.complete_agent(

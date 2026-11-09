@@ -53,7 +53,7 @@ async def run_company_scout(run_id: str, user: AuthenticatedUser = Depends(get_c
                     confidence=company.fit_score,
                 )
         except Exception as exc:  # noqa: BLE001 - record and re-raise as a clean 502
-            repo.fail_agent(run_id, AgentName.COMPANY_SCOUT, str(exc))
+            repo.fail_agent(run_id, AgentName.COMPANY_SCOUT, f"{type(exc).__name__}: {exc}")
             raise HTTPException(status_code=502, detail=f"Company Scout failed: {exc}") from exc
 
         repo.complete_agent(

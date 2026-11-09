@@ -39,8 +39,15 @@ async def run_people_finder(run_id: str, user: AuthenticatedUser = Depends(get_c
                 settings.search_provider, settings.tavily_api_key or None, settings.searxng_base_url or None
             )
             total_selected: list[Person] = []
+            failed_companies: list[dict] = []
             for company in companies:
-                candidates = await discover_people_for_company(search, company.name)
+                try:
+                    candidates = await discover_people_for_company(search, company.name)
+                except Exception as exc:  # noqa: BLE001 - one company's provider failure must not sink the run
+                    failed_companies.append(
+                        {"company_id": company.id, "error": f"{type(exc).__name__}: {exc}"}
+                    )
+                    continue
                 leaders = select_leaders(candidates, people_per_company)
                 persisted = repo.upsert_people(run_id, user.user_id, company.id, leaders)
                 total_selected.extend(persisted)
@@ -53,14 +60,27 @@ async def run_people_finder(run_id: str, user: AuthenticatedUser = Depends(get_c
                         source_url=person.linkedin_url or company.source_url,
                         confidence=person.confidence,
                     )
+            if failed_companies and len(failed_companies) == len(companies):
+                # every single company failed -> a real outage, not isolated
+                # noise; fail the agent so it's visibly retried, instead of
+                # silently completing with zero people found.
+                raise RuntimeError(
+                    f"all {len(companies)} companies failed search "
+                    f"(e.g. {failed_companies[0]['error']})"
+                )
         except Exception as exc:  # noqa: BLE001 - record and re-raise as a clean 502
-            repo.fail_agent(run_id, AgentName.PEOPLE_FINDER, str(exc))
+            repo.fail_agent(run_id, AgentName.PEOPLE_FINDER, f"{type(exc).__name__}: {exc}")
             raise HTTPException(status_code=502, detail=f"People Finder failed: {exc}") from exc
 
         repo.complete_agent(
             run_id,
             AgentName.PEOPLE_FINDER,
-            {"companies_processed": len(companies), "people_found": len(total_selected)},
+            {
+                "companies_processed": len(companies),
+                "people_found": len(total_selected),
+                "companies_failed": len(failed_companies),
+                "failures": failed_companies[:10],  # cap stored detail, avoid unbounded JSON
+            },
         )
         return {
             "companies_processed": len(companies),

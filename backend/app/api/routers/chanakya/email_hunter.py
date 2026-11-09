@@ -56,7 +56,7 @@ async def run_email_hunter(run_id: str, user: AuthenticatedUser = Depends(get_cu
                         confidence=best["confidence"],
                     )
         except Exception as exc:  # noqa: BLE001 - record and re-raise as a clean 502
-            repo.fail_agent(run_id, AgentName.EMAIL_HUNTER, str(exc))
+            repo.fail_agent(run_id, AgentName.EMAIL_HUNTER, f"{type(exc).__name__}: {exc}")
             raise HTTPException(status_code=502, detail=f"Email Hunter failed: {exc}") from exc
 
         repo.complete_agent(
