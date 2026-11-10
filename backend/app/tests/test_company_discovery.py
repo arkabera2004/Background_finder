@@ -241,3 +241,22 @@ def test_is_operating_company_page_rejects_a_venture_capital_firm():
     assert is_operating_company_page(
         "https://fintech.io", "FinTech Collective", "An early-stage investor in fintech startups."
     ) is False
+
+
+@pytest.mark.parametrize(
+    "url,title",
+    [
+        ("https://courses.cfte.education/ranking-of-largest-fintech-companies", "Largest Fintech Companies 2025 [Full Ranked List + Map]"),
+        ("https://leadmagic.io/funded-startups/series-b", "187+ Series B Startups Recently Funded (2026)"),
+        ("https://quantaintelligence.ai/tag/fintech-companies", "fintech companies Archives - Quanta Intelligence"),
+        ("https://robots.net/ai/how-many-fintech-companies-are-there", "How Many Fintech Companies Are There | Robots.net"),
+    ],
+)
+def test_is_operating_company_page_rejects_hyphenated_slug_listicles(url, title):
+    """Regression: these survived the first version of the filter (live
+    run 021ac411-c3cc-40b8-8192-16ba05372c8c) because "companies"/
+    "startups" appeared mid-slug (e.g. "funded-startups", "fintech-
+    companies"), not as a clean /companies/ path segment, and the title
+    phrasing ("Ranked List", "Recently Funded", "Archives", "How Many
+    ... Are There") wasn't covered by the original listicle-phrase set."""
+    assert is_operating_company_page(url, title) is False

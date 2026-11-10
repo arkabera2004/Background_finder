@@ -69,19 +69,27 @@ _MEDIA_AND_LISTICLE_DOMAINS = {
 }
 
 # A real operating company's own homepage/about page has a shallow URL
-# path. A listicle, blog post, glossary entry, or directory search result
-# almost always lives several segments deep, or carries query params for
-# pagination/filtering (?page=2). This catches listicle pages on domains
-# not already in the blocklist above (the blocklist can't be exhaustive).
+# path. A listicle, blog post, glossary entry, tag archive, or directory
+# search result almost always lives several segments deep, carries query
+# params for pagination/filtering (?page=2), or has these words anywhere
+# in a hyphenated slug (not just as an exact path segment — confirmed
+# live: /ranking-of-largest-fintech-companies and /funded-startups/
+# series-b both contain "companies"/"startups" mid-slug, not as a clean
+# segment, and were missed by an exact-segment-only version of this
+# regex). This catches listicle pages on domains not already in the
+# blocklist above (the blocklist can't be exhaustive).
 _NON_HOMEPAGE_PATH_RE = re.compile(
-    r"/(blog|articles?|news|glossary|guide|search|companies|startups|posts?)(/|$|\?)", re.I
+    r"/(blog|articles?|news|glossary|guide|tag|ranking|funded)(/|$|\?|-)|"
+    r"(blog|articles?|glossary|companies|startups|posts?)s?(/|$|\?|-)",
+    re.I,
 )
 
 # Headline/listicle phrasing — a page *about* a market segment, not a
 # specific company's own site, even when the URL path looks shallow.
 _LISTICLE_TITLE_RE = re.compile(
-    r"\b(top \d|top\s+\w+\s+fintech|best\s|\d+\s+(fintech|startups?|companies)|"
-    r"what is|guide to|definition|vs\.?\s|list of|companies in|startups in)\b",
+    r"\b(top \d|top\s+\w+\s+fintech|best\s|\d+\+?\s+(fintech|startups?|companies)|"
+    r"what is|how many|guide to|definition|vs\.?\s|list of|ranked list|"
+    r"recently funded|companies in|startups in)\b",
     re.I,
 )
 
