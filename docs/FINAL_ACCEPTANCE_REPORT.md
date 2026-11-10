@@ -319,3 +319,131 @@ missing-stub errors, zero new); frontend `tsc --noEmit` clean, `eslint
 src` clean (3 pre-existing warnings only), `npm run build` succeeds.
 No new commits this round — the defect fix was already pushed at
 `5989d52` prior to this live run; this session only exercised it.
+
+## 2026-11-10 update — discovery quality, data integrity, live re-verification
+
+This round addressed a business-quality problem the 2026-11-10 live run
+exposed: structurally working (0 crashes, correct API responses) is not
+the same as producing credible output. Audited and fixed Company Scout,
+People Finder, and LinkedIn Resolver against real false positives from
+run `24882912-3ff9-4b78-8d59-be945e636b41`, then created a second,
+separate live run to verify the fixes against fresh real data without
+touching the first run's preserved data.
+
+### Root causes found and fixed (4 commits, all pushed)
+
+1. **`85201f1`** — Company Scout's only filter was an aggregator
+   blocklist (ZoomInfo, Crunchbase, …); a bare keyword search returned
+   48 results and **100% were listicle/glossary/directory pages about
+   the industry, zero were an actual operating company's own site**
+   (`builtin.com`, `craft.co`, `forbes.com`-style content, government
+   company-registry lookups, generic fundraising-explainer blogs). New
+   `is_operating_company_page()` rejects by domain blocklist, URL-path
+   shape, and listicle title phrasing. Also added the ICP's `geography`
+   filter to the discovery query (previously silently dropped).
+2. **`6438d7c`** — People Finder's only check was a title-shape regex; a
+   company name, an article title, a LinkedIn *post* (not a profile), or
+   an unrelated investor-tracking site could all satisfy "capitalized
+   words then a dash" and be persisted as a "person" (`CIO Connect`,
+   `India's Late`, `Ensun Energy Systems`, `Kafum Engineering`, `Tomasz
+   Tunguz's Investing Profile` — all real examples from the live run).
+   Fix: reject outright unless the URL is a genuine `linkedin.com/in/`
+   profile; reject organisation-indicator words in the name even then.
+3. **`859bd20`** — `fintech.io` ("FinTech Collective") passed every
+   other check and was selected as a qualified "Series B fintech
+   company" — it is the venture capital firm that invests in such
+   companies, not one. Added VC-firm language detection.
+4. **`fd7db8c`** — LinkedIn Resolver's `site:linkedin.com/in`-scoped
+   search still surfaced profiles with zero actual connection to the
+   target company (e.g. an unrelated Argentine mechanical engineer
+   sharing a name with the real candidate), inflating ambiguous-match
+   noise. Reused the existing company-discovery relevance check to
+   drop candidates with no evidence of the target company. Safety
+   principle unchanged: 0 or 2+ surviving candidates still goes to
+   manual review; exactly 1 still auto-confirms.
+5. **`9c0029b`** — the live re-verification run (below) immediately
+   found 4 more false positives the first Company Scout fix missed
+   (hyphenated-slug paths like `/funded-startups/series-b` and title
+   phrasing like "Recently Funded" / "Ranked List" / "Archives"
+   weren't covered yet). Widened the patterns; verified all 5 original
+   false positives plus a real homepage now classify correctly.
+
+25 new/updated regression tests across these 5 commits, every one
+seeded from a real false positive found on real data, not invented.
+Full suite after each commit: 402 → 403 → 404 → 408 passed (final:
+**408 passed, 6 skipped, ruff clean, mypy clean**).
+
+### Live re-verification run (separate from, not overwriting, the original)
+
+New run `021ac411-c3cc-40b8-8192-16ba05372c8c` (period `2026-12`), same
+ICP ("GenAI Accelerator" / fintech, Series B), same free DuckDuckGo
+provider, created and driven live through the browser exactly like the
+first run. The original run `24882912-...` (period `2026-11`) was left
+untouched — both still exist, independently inspectable.
+
+| Metric | Before (run `24882912`) | After (run `021ac411`) |
+|---|---|---|
+| Companies selected | 48 | 5 |
+| Companies that were real operating companies | **0 / 48 (0%)** | 4 / 5 (80%, before the 5th commit's fix — see below) |
+| People persisted | 49 | 10 |
+| People with a real LinkedIn profile URL | 37 / 49 (76%) | 10 / 10 (100%) |
+| Non-person entities in the people table | 12 | 0 |
+
+The one remaining false-positive company from this run
+(`courses.cfte.education`'s "Largest Fintech Companies 2025 [Full
+Ranked List + Map]") is exactly what commit `9c0029b` fixes — confirmed
+by direct unit test against the literal URL/title from this run, not a
+third live run (deliberately not spending more live search calls once
+the fix was proven correct against the exact failing input).
+
+### A deeper issue found, not fixed this round
+
+Company Scout stores the raw search-result **title** as the company's
+`name` field verbatim — for `fintech.com`, that title is "The Business
+Automation Platform for Retail & Hospitality | Fintech®", marketing
+copy, not a clean company name. This weakens the LinkedIn Resolver's
+new relevance filter: that "name"'s distinctive tokens (`business`,
+`automation`, `platform`, `retail`, `hospitality`, `fintech`) are
+generic enough that several unrelated LinkedIn profiles happened to
+share one, so the Brandon Thompson candidate list for this company
+still carried 4 unrelated namesakes through the relevance filter
+(confirmed by direct inspection of `candidate_profiles` in the
+database). **Not fixed this session** — a real company-name extraction
+step (distinct from the domain-matching already done) is a legitimate
+next task, not a quick regex patch, and attempting one under remaining
+time pressure risked introducing a new defect rather than fixing this
+one cleanly.
+
+### What this round did not reach
+
+- Section 3's funding-stage evidence requirement ("never infer Series B
+  status from a generic article") is only partially addressed: the new
+  filter removes pages that are *about the industry in general*, but
+  does not verify that a surviving candidate's own page actually
+  asserts Series B funding specifically — `fintech.com` passing the
+  structural check is not itself evidence of Series B status for that
+  company. Confidence/qualification-reason fields beyond the existing
+  `fit_score` were not added (would need a migration; the existing
+  `Evidence` provenance table already records `source_url`+`confidence`
+  per entity, which this round continued to rely on rather than
+  extending).
+- Section 5 (explicit cross-company dedup for "Joseph F. Squeri", "Anna
+  Hester", "Hartley Caldwell" appearing more than once) was not built
+  as a separate dedup system. The root cause was the same discovery
+  noise fixed above — `fintech.io` (a VC firm) being treated as a
+  distinct "company" produced overlapping people lists against what
+  was never a real, distinct operating company. No new cross-run/
+  cross-company entity-resolution logic was added; `Anna Hester` in the
+  new run is a single, correctly-unique record.
+- Section 9 (Email Hunter/Profile Researcher/QA & Sync downstream
+  testing against the improved data) was not reached — the new run's
+  people are still all `ambiguous` (10/10, same correct safety behavior
+  as before: common names, real noisy search results), so the
+  downstream chain remains correctly blocked on human review, same as
+  documented for the first run. No email was generated or sent.
+- Docker, paid-provider authorization, and Azure credentials remain
+  exactly as previously documented — unchanged this round.
+
+### Commits this round (all pushed, HEAD verified == origin/main after each)
+
+`85201f1`, `6438d7c`, `859bd20`, `fd7db8c`, `9c0029b`.
