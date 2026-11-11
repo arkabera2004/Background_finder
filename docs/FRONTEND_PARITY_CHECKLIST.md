@@ -28,10 +28,17 @@ Chanakya-section sub-nav (done) rather than rewriting the global shell.
 | Setup wizard (4-step: Sender/Offerings/Exclusions/Connections) | Not started |
 | ICP configuration / scoring-rules page | Not started — Chanakya's scoring is currently a fixed `score_fit()` function, not a user-configurable weight UI like the reference |
 
-## Phase C — Company discovery (not started)
-Cross-run Companies table (fit-score bar, top-signal column, tabs/search)
-— currently only visible nested inside one run's detail page, not as a
-standalone cross-run view like the reference.
+## Phase C — Company discovery
+
+| Item | Status | Evidence |
+|---|---|---|
+| Cross-run Companies page | **Done** | `/chanakya/companies`, commits `42d9caa`/`ce3f170`, browser-verified at 210-company scale |
+| Tabs with live counts (All/High fit/Selected) | **Done** | same |
+| Search by name/domain | **Done** | same |
+| Fit score as number + bar | **Done** | same |
+| Top-signal column (matched-evidence phrase) | Not started — `ScoutedCompany` has no column storing *which* evidence phrase matched; would need either a new field or deriving it client-side from `Evidence` |
+| Company detail drawer/page | Not started |
+| "Add company" (manual entry) | Not started — no backend endpoint for a manually-added company exists |
 
 ## Phase D — People discovery (not started)
 Cross-run Leaders table. LinkedIn identity resolution UI already exists
