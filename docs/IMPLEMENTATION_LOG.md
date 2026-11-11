@@ -126,3 +126,40 @@ separately as a small, atomic commit.
 Next exact task (see `docs/NEW_CHAT_HANDOFF.md` §6 for detail): diagnose
 and fix why the authenticated E2E suite's research-pipeline-completion
 test times out against real Supabase + real Gemini in CI.
+
+## 2026-11-11 — LinkedIn Harness audit + Chanakya UI transformation Phase A
+
+Audited `/Users/arkabera/Desktop/Mriganko Da/linkedinharness` (the
+correct reference path; "LinkedIn Harness" doesn't exist under that
+exact name on this machine). Found it to be an earlier build of this
+same Chanakya product plus a `browser-use`-based real-LinkedIn-session
+scraper — excluded that scraper from integration (LinkedIn ToS +
+project's own compliance rules both forbid it); the Next.js reference
+UI was run live in demo mode and audited. See
+`docs/LINKEDIN_HARNESS_REFERENCE_AUDIT.md`,
+`docs/REQUIRED_APIS_AND_CREDENTIALS.md`.
+
+Fixed two real defects found while investigating a live run
+(`df96c66d-6664-4e7a-9361-6518366727ea`, period 2027-01, all 27 real
+Wayam AI accelerator products submitted as offerings):
+- Discovered the backend was configured for Tavily (paid), not
+  DuckDuckGo, and had been spending real quota across prior sessions'
+  live orchestrate clicks without that being surfaced — switched
+  `SEARCH_PROVIDER` to `duckduckgo`, restarted the backend, confirmed.
+- LinkedIn Resolver had no per-person failure isolation (unlike Company
+  Scout/People Finder, fixed in the previous session) — a single
+  DuckDuckGo timeout on person #1 killed the whole stage, leaving 41
+  real people stuck "pending" forever. Fixed with the same isolate-and-
+  continue pattern; regression test added.
+- Added a retry to the JWKS fetch in `get_current_user` after observing
+  a transient "Could not verify token signature" error live (network
+  blip reaching Supabase, not a broken auth flow).
+
+Began the frontend transformation: Phase A (`ChanakyaSubNav` — grouped
+nav with live counts, reproducing the reference's sidebar pattern at
+the Chanakya-section level) is done and browser-verified. See
+`docs/FRONTEND_PARITY_CHECKLIST.md` for the full phase-by-phase status;
+phases B–G are not started.
+
+Commits this round, all pushed, `HEAD == origin/main` verified after
+each: `1267560`, `f9aecb5`, `7077e8e`, `89bba17`, `597b473`.
