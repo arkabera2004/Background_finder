@@ -122,3 +122,31 @@ def test_rejects_asymmetric_token_when_jwks_fetch_fails(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         auth.get_current_user(FakeRequest(f"Bearer {token}"))
     assert exc.value.status_code == 401
+
+
+def test_jwks_fetch_retries_once_on_transient_network_error(monkeypatch):
+    """Regression: a one-off transient JWKS fetch failure (observed live as
+    a "Could not verify token signature" error that cleared on reload)
+    must not fail the request if the retry succeeds."""
+    full_jwk, public_jwk = _ec_keypair(kid="kid-1")
+    monkeypatch.setattr(auth, "_jwks_cache", None)
+    calls = {"n": 0}
+
+    def _flaky_get(*_a, **_k):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise httpx.ConnectError("transient")
+        return _FakeJwksResponse([public_jwk])
+
+    monkeypatch.setattr(httpx, "get", _flaky_get)
+
+    token = jwt.encode(
+        {"aud": "authenticated", "exp": time.time() + 60, "sub": "user-1"},
+        full_jwk,
+        algorithm="ES256",
+        headers={"kid": "kid-1"},
+    )
+
+    user = auth.get_current_user(FakeRequest(f"Bearer {token}"))
+    assert user.user_id == "user-1"
+    assert calls["n"] == 2

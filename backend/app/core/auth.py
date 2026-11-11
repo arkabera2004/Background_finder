@@ -20,8 +20,18 @@ class AuthenticatedUser:
 
 def _fetch_jwks() -> dict:
     global _jwks_cache
-    resp = httpx.get(f"{settings.supabase_url}/auth/v1/.well-known/jwks.json", timeout=10)
-    resp.raise_for_status()
+    url = f"{settings.supabase_url}/auth/v1/.well-known/jwks.json"
+    # shortcut: one retry on a transient network error — observed live as a
+    # one-off "Could not verify token signature" that cleared on reload;
+    # a real outage still raises after the second attempt.
+    for attempt in range(2):
+        try:
+            resp = httpx.get(url, timeout=10)
+            resp.raise_for_status()
+            break
+        except httpx.HTTPError:
+            if attempt == 1:
+                raise
     jwks: dict = resp.json()
     _jwks_cache = jwks
     return jwks
