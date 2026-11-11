@@ -141,3 +141,34 @@ def test_list_runs_never_leaks_another_owners_runs():
 
     assert len(owner_a_runs) == 2
     assert len(owner_b_runs) == 1
+
+
+def test_list_all_companies_never_leaks_another_owners_companies(monkeypatch):
+    from app.api.routers.chanakya import company_scout as company_scout_router
+    from app.providers.search_provider import SearchProvider, SearchResult
+
+    class _FakeScout(SearchProvider):
+        name = "fake"
+
+        async def search(self, query: str, max_results: int = 10) -> list[SearchResult]:
+            return [SearchResult(url="https://acme.com/about", title="Acme fintech", snippet="fintech")]
+
+    monkeypatch.setattr("app.services.company_discovery._is_safe_host", lambda hostname: True)
+    monkeypatch.setattr(company_scout_router, "build_search_provider", lambda *a, **k: _FakeScout())
+
+    headers_a = _auth_header("owner-a")
+    headers_b = _auth_header("owner-b")
+    run_a = client.post("/chanakya/runs", json={"period": "2026-11"}, headers=headers_a).json()
+    client.post(
+        f"/chanakya/runs/{run_a['id']}/offerings",
+        json={"offerings": [{"name": "X", "icp_criteria": ["fintech"]}]},
+        headers=headers_a,
+    )
+    client.post(f"/chanakya/runs/{run_a['id']}/company-scout", headers=headers_a)
+
+    owner_a_companies = client.get("/chanakya/companies", headers=headers_a).json()
+    owner_b_companies = client.get("/chanakya/companies", headers=headers_b).json()
+
+    assert len(owner_a_companies) == 1
+    assert owner_a_companies[0]["domain"] == "acme.com"
+    assert owner_b_companies == []

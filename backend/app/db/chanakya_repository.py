@@ -193,6 +193,17 @@ class ChanakyaRunRepository:
             query = query.filter(ScoutedCompany.selected.is_(True))
         return query.order_by(ScoutedCompany.fit_score.desc()).all()
 
+    def list_all_scouted_companies_for_owner(
+        self, owner_id: str, selected_only: bool = False
+    ) -> list[ScoutedCompany]:
+        """Cross-run company view: every company this owner's runs have
+        ever scouted, newest-run-first then by fit score — the aggregate
+        equivalent of list_scouted_companies() for one run."""
+        query = self.session.query(ScoutedCompany).filter(ScoutedCompany.owner_id == owner_id)
+        if selected_only:
+            query = query.filter(ScoutedCompany.selected.is_(True))
+        return query.order_by(ScoutedCompany.created_at.desc(), ScoutedCompany.fit_score.desc()).all()
+
     def upsert_people(self, run_id: str, owner_id: str, company_id: str, candidates: list[dict]) -> list[Person]:
         """Dedup by (run_id, company_id, full_name): re-running discovery
         for a company updates an existing candidate's role/confidence

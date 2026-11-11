@@ -77,3 +77,21 @@ async def list_scouted_companies(
         return [company_to_dict(c) for c in repo.list_scouted_companies(run_id, selected_only)]
     finally:
         session.close()
+
+
+@router.get("/companies")
+async def list_all_companies(
+    selected_only: bool = False, user: AuthenticatedUser = Depends(get_current_user)
+) -> list[dict]:
+    """Cross-run view: every company this owner's monthly runs have ever
+    scouted, across all periods — the aggregate equivalent of the
+    per-run endpoint above."""
+    session = get_session()
+    try:
+        repo = ChanakyaRunRepository(session)
+        return [
+            company_to_dict(c)
+            for c in repo.list_all_scouted_companies_for_owner(user.user_id, selected_only)
+        ]
+    finally:
+        session.close()
