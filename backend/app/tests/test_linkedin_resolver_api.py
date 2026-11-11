@@ -175,3 +175,69 @@ def test_manual_resolve_404_for_unknown_person(monkeypatch):
     )
 
     assert response.status_code == 404
+
+
+class _TwoCompanyScoutProvider(SearchProvider):
+    name = "two-company-scout"
+
+    async def search(self, query: str, max_results: int = 10) -> list[SearchResult]:
+        return [
+            SearchResult(url="https://good-co.com/about", title="GoodCo fintech", snippet="fintech"),
+            SearchResult(url="https://bad-co.com/about", title="BadCo fintech", snippet="fintech"),
+        ]
+
+
+class _OneNameFailsResolverProvider(SearchProvider):
+    """Craig-style: the first person's query always times out; the rest
+    resolve normally. Regression for run df96c66d-6664-4e7a-9361-6518366727ea
+    where a single DuckDuckGo timeout on person #1 killed LinkedIn Resolver
+    entirely, leaving every other already-found person stuck pending."""
+
+    name = "one-name-fails"
+
+    async def search(self, query: str, max_results: int = 10) -> list[SearchResult]:
+        if "Flaky Person" in query:
+            raise RuntimeError("DuckDuckGo search timed out after 20s")
+        return [SearchResult(url="https://linkedin.com/in/goodperson", title=f"{query.split(chr(34))[1]} - GoodCo fintech")]
+
+
+def test_linkedin_resolver_survives_one_persons_search_failure(monkeypatch):
+    from app.api.routers.chanakya import company_scout as company_scout_router
+    from app.api.routers.chanakya import linkedin_resolver as resolver_router
+    from app.api.routers.chanakya import people_finder as people_finder_router
+
+    headers = _auth_header()
+    monkeypatch.setattr("app.services.company_discovery._is_safe_host", lambda hostname: True)
+    monkeypatch.setattr(company_scout_router, "build_search_provider", lambda *a, **k: _TwoCompanyScoutProvider())
+
+    run = client.post("/chanakya/runs", json={"period": "2026-11"}, headers=headers).json()
+    client.post(
+        f"/chanakya/runs/{run['id']}/offerings",
+        json={"offerings": [{"name": "X", "icp_criteria": ["fintech"]}]},
+        headers=headers,
+    )
+    client.post(f"/chanakya/runs/{run['id']}/company-scout", headers=headers)
+
+    class _PeopleFakeProvider(SearchProvider):
+        name = "people-fake"
+
+        async def search(self, query: str, max_results: int = 10) -> list[SearchResult]:
+            if "GoodCo" in query:
+                return [SearchResult(url="https://linkedin.com/in/goodperson", title="Good Person - CEO - GoodCo | LinkedIn")]
+            return [SearchResult(url="https://linkedin.com/in/flakyperson", title="Flaky Person - CEO - BadCo | LinkedIn")]
+
+    monkeypatch.setattr(people_finder_router, "build_search_provider", lambda *a, **k: _PeopleFakeProvider())
+    client.post(f"/chanakya/runs/{run['id']}/people-finder", headers=headers)
+
+    monkeypatch.setattr(resolver_router, "build_search_provider", lambda *a, **k: _OneNameFailsResolverProvider())
+    response = client.post(f"/chanakya/runs/{run['id']}/linkedin-resolver", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["confirmed"] == 1
+    assert body["failed"] == 1
+
+    run_detail = client.get(f"/chanakya/runs/{run['id']}", headers=headers).json()
+    resolver_execution = next(e for e in run_detail["agent_executions"] if e["agent_name"] == "linkedin_resolver")
+    assert resolver_execution["status"] == "completed"
+    assert resolver_execution["output_summary"]["failed"] == 1

@@ -38,9 +38,14 @@ async def run_linkedin_resolver(run_id: str, user: AuthenticatedUser = Depends(g
                 settings.search_provider, settings.tavily_api_key or None, settings.searxng_base_url or None
             )
             confirmed = ambiguous = unresolved = 0
+            failed_people: list[dict] = []
             for person in people:
                 company = next(c for c in run.scouted_companies if c.id == person.company_id)
-                outcome = await resolve_person_identity(search, person.full_name, company.name)
+                try:
+                    outcome = await resolve_person_identity(search, person.full_name, company.name)
+                except Exception as exc:  # noqa: BLE001 - one person's provider failure must not sink the run
+                    failed_people.append({"person_id": person.id, "error": f"{type(exc).__name__}: {exc}"})
+                    continue
                 repo.apply_resolution(
                     person,
                     outcome["resolution_status"],
@@ -61,6 +66,12 @@ async def run_linkedin_resolver(run_id: str, user: AuthenticatedUser = Depends(g
                     ambiguous += 1
                 else:
                     unresolved += 1
+            if failed_people and len(failed_people) == len(people):
+                # every single person failed -> a real outage, not isolated
+                # noise; fail the agent so it's visibly retried.
+                raise RuntimeError(
+                    f"all {len(people)} people failed resolution (e.g. {failed_people[0]['error']})"
+                )
         except Exception as exc:  # noqa: BLE001 - record and re-raise as a clean 502
             repo.fail_agent(run_id, AgentName.LINKEDIN_RESOLVER, f"{type(exc).__name__}: {exc}")
             raise HTTPException(status_code=502, detail=f"LinkedIn Resolver failed: {exc}") from exc
@@ -68,13 +79,21 @@ async def run_linkedin_resolver(run_id: str, user: AuthenticatedUser = Depends(g
         repo.complete_agent(
             run_id,
             AgentName.LINKEDIN_RESOLVER,
-            {"processed": len(people), "confirmed": confirmed, "ambiguous": ambiguous, "unresolved": unresolved},
+            {
+                "processed": len(people),
+                "confirmed": confirmed,
+                "ambiguous": ambiguous,
+                "unresolved": unresolved,
+                "failed": len(failed_people),
+                "failures": failed_people[:10],
+            },
         )
         return {
             "processed": len(people),
             "confirmed": confirmed,
             "ambiguous": ambiguous,
             "unresolved": unresolved,
+            "failed": len(failed_people),
         }
     finally:
         session.close()
