@@ -75,6 +75,7 @@ def person_to_dict(person: Person) -> dict:
         "id": person.id,
         "run_id": person.run_id,
         "company_id": person.company_id,
+        "company_name": person.company.name if person.company else None,
         "full_name": person.full_name,
         "role": person.role,
         "linkedin_url": person.linkedin_url,

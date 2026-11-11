@@ -101,3 +101,16 @@ async def list_people(
         return [person_to_dict(p) for p in repo.list_people(run_id, company_id)]
     finally:
         session.close()
+
+
+@router.get("/people")
+async def list_all_people(user: AuthenticatedUser = Depends(get_current_user)) -> list[dict]:
+    """Cross-run view: every leader any of the owner's monthly runs has
+    ever found, across all periods — the aggregate equivalent of the
+    per-run endpoint above."""
+    session = get_session()
+    try:
+        repo = ChanakyaRunRepository(session)
+        return [person_to_dict(p) for p in repo.list_all_people_for_owner(user.user_id)]
+    finally:
+        session.close()

@@ -244,6 +244,17 @@ class ChanakyaRunRepository:
             query = query.filter(Person.company_id == company_id)
         return query.order_by(Person.confidence.desc()).all()
 
+    def list_all_people_for_owner(self, owner_id: str) -> list[Person]:
+        """Cross-run leader view: every person any of this owner's runs
+        has ever found, newest-run-first then by confidence — the
+        aggregate equivalent of list_people() for one run."""
+        return (
+            self.session.query(Person)
+            .filter(Person.owner_id == owner_id)
+            .order_by(Person.created_at.desc(), Person.confidence.desc())
+            .all()
+        )
+
     def get_person(self, person_id: str, run_id: str) -> Person | None:
         return (
             self.session.query(Person)
