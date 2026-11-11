@@ -17,9 +17,16 @@ replacing the global sidebar with the reference's flat Chanakya-only
 structure would hide ProspectLens navigation — scoped instead to a
 Chanakya-section sub-nav (done) rather than rewriting the global shell.
 
-## Phase B — Configuration (not started)
-Setup wizard · Offerings catalogue (tag/forte-badge cards, "Sync from
-website") · ICP configuration · Scoring rules.
+## Phase B — Configuration
+
+| Item | Status | Evidence |
+|---|---|---|
+| Offerings catalogue card display (name + ICP tag pills) | **Done** | commit `e744da4`, browser-verified at 27-offering scale |
+| Submitted-vs-draft distinction, draft cleared after submit | **Done** | same commit |
+| "Our forte" badge | Not applicable — no such field exists in Chanakya's data model (would need a schema change, not just UI) |
+| "Sync from website" (auto-derive offerings) | Not started — real feature, needs a new backend endpoint |
+| Setup wizard (4-step: Sender/Offerings/Exclusions/Connections) | Not started |
+| ICP configuration / scoring-rules page | Not started — Chanakya's scoring is currently a fixed `score_fit()` function, not a user-configurable weight UI like the reference |
 
 ## Phase C — Company discovery (not started)
 Cross-run Companies table (fit-score bar, top-signal column, tabs/search)
