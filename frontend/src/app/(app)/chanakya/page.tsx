@@ -4,6 +4,7 @@ import { Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { ChanakyaSubNav } from "@/components/chanakya-sub-nav";
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,13 +53,9 @@ export default function ChanakyaPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-display tracking-tight">Chanakya — Monthly Runs</h1>
-        <Link href="/chanakya/schedules">
-          <Button variant="outline" size="sm">
-            Manage schedules
-          </Button>
-        </Link>
+      <div>
+        <h1 className="text-xl font-display tracking-tight">Chanakya — GTM Prospecting Engine</h1>
+        <ChanakyaSubNav />
       </div>
 
       <Card className="flex items-end gap-3 p-4">

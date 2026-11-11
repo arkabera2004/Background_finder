@@ -3,6 +3,7 @@
 import { CalendarClock } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { ChanakyaSubNav } from "@/components/chanakya-sub-nav";
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -81,7 +82,10 @@ export default function ChanakyaSchedulesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-display tracking-tight">Chanakya — Monthly Schedules</h1>
+      <div>
+        <h1 className="text-xl font-display tracking-tight">Chanakya — GTM Prospecting Engine</h1>
+        <ChanakyaSubNav />
+      </div>
       <p className="text-sm text-muted-foreground">
         A schedule auto-triggers the full seven-agent pipeline every month on the chosen day, for the
         offering/ICP brief stored here — no manual &quot;New monthly run&quot; click needed. A manual run always
