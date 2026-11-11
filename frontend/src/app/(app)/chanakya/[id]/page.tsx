@@ -13,6 +13,7 @@ import {
   type EmailCandidateView,
   type MonthlyRun,
   type OfferingInput,
+  type OfferingSnapshot,
   type PersonView,
   type QARecordView,
   type ScoutedCompanyView,
@@ -44,6 +45,7 @@ export default function ChanakyaRunDetailPage() {
   const [emails, setEmails] = useState<EmailCandidateView[]>([]);
   const [qaRecords, setQaRecords] = useState<QARecordView[]>([]);
   const [needsReview, setNeedsReview] = useState<PersonView[]>([]);
+  const [offeringSnapshots, setOfferingSnapshots] = useState<OfferingSnapshot[]>([]);
   const [resolveUrls, setResolveUrls] = useState<Record<string, string>>({});
   const [offerings, setOfferings] = useState<OfferingInput[]>([]);
   const [offeringName, setOfferingName] = useState("");
@@ -55,18 +57,20 @@ export default function ChanakyaRunDetailPage() {
     try {
       const r = await chanakyaApi.getRun(runId);
       setRun(r);
-      const [c, p, e, q, nr] = await Promise.all([
+      const [c, p, e, q, nr, offs] = await Promise.all([
         chanakyaApi.listCompanies(runId).catch(() => []),
         chanakyaApi.listPeople(runId).catch(() => []),
         chanakyaApi.listEmails(runId).catch(() => []),
         chanakyaApi.listQaRecords(runId).catch(() => []),
         chanakyaApi.listPeopleNeedingReview(runId).catch(() => []),
+        chanakyaApi.listOfferings(runId).catch(() => []),
       ]);
       setCompanies(c);
       setPeople(p);
       setEmails(e);
       setQaRecords(q);
       setNeedsReview(nr);
+      setOfferingSnapshots(offs);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load run");
     }
@@ -105,6 +109,7 @@ export default function ChanakyaRunDetailPage() {
     setError(null);
     try {
       await chanakyaApi.submitOfferings(runId, toSubmit);
+      setOfferings([]);
       await loadAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit offering brief");
@@ -197,8 +202,36 @@ export default function ChanakyaRunDetailPage() {
           Multiple offerings may be submitted together — Company Scout searches once per ICP criterion
           across all of them. Each submission creates a new version; prior versions are never overwritten.
         </p>
+
+        {offeringSnapshots.length > 0 && (() => {
+          const latest = offeringSnapshots.reduce((a, b) => (b.version > a.version ? b : a));
+          return (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">
+                Submitted catalogue (version {latest.version})
+              </p>
+              {latest.data.offerings.map((o, i) => (
+                <div key={`${o.name}-${i}`} className="rounded-lg border p-3">
+                  <p className="font-medium">{o.name}</p>
+                  {o.description && <p className="text-sm text-muted-foreground">{o.description}</p>}
+                  {o.icp_criteria && o.icp_criteria.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {o.icp_criteria.map((c) => (
+                        <Badge key={c} variant="secondary">
+                          {c}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         {offerings.filter((o) => o.name.trim()).length > 0 && (
           <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Draft (not yet submitted)</p>
             {offerings
               .filter((o) => o.name.trim())
               .map((o, i) => (
