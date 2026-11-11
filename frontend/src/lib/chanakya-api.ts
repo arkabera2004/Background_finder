@@ -167,6 +167,8 @@ export const chanakyaApi = {
     request<OrchestrateResult>(`/chanakya/runs/${runId}/orchestrate`, { method: "POST" }),
   listCompanies: (runId: string, selectedOnly = false) =>
     request<ScoutedCompanyView[]>(`/chanakya/runs/${runId}/companies?selected_only=${selectedOnly}`),
+  listAllCompanies: (selectedOnly = false) =>
+    request<ScoutedCompanyView[]>(`/chanakya/companies?selected_only=${selectedOnly}`),
   listPeople: (runId: string) => request<PersonView[]>(`/chanakya/runs/${runId}/people`),
   listPeopleNeedingReview: (runId: string) =>
     request<PersonView[]>(`/chanakya/runs/${runId}/people/needs-review`),
