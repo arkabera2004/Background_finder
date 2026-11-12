@@ -50,9 +50,14 @@ Chanakya-section sub-nav (done) rather than rewriting the global shell.
 | LinkedIn-linked name, resolution-status badge | **Done** | same |
 | Manual LinkedIn-lookup / identity-resolution review restyled to reference pattern | Not started — the existing per-run review queue (built in an earlier session) works but hasn't been re-styled to match the reference's "Needs you" card layout |
 
-## Phase E — Execution and orchestration (not started)
-Agent cards with live progress, funnel chart, live log panel, metrics
-grid — currently only a plain status-badge list.
+## Phase E — Execution and orchestration
+
+| Item | Status | Evidence |
+|---|---|---|
+| Agent cards (icon + status + real per-stage metric) | **Done** | commit `dd73598`, browser-verified against a real 157-company/41-person run |
+| Funnel chart (real percentages, not fabricated) | **Done** | same |
+| Live, streaming execution log | **Not buildable without new infrastructure** — Chanakya's agents run synchronously within one HTTP request; there is no WebSocket/SSE channel for Chanakya runs (ProspectLens's separate single-prospect flow has SSE, Chanakya doesn't). A "live log" without a real stream behind it would be a fake, which the project's own rules forbid. Flagged as a real backend gap, not skipped silently. |
+| Metrics grid (LLM calls/tokens, LinkedIn pages used today) | **Not buildable** — Chanakya doesn't track LLM token counts or provider call counts anywhere in its data model; would need new instrumentation, not a UI task |
 
 ## Phase F — Review and integrations (not started)
 "Needs you" aggregate queue (currently per-run only) · Integrations
