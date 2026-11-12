@@ -106,7 +106,7 @@ export default function ChanakyaPeoplePage() {
         />
       ) : (
         <div className="overflow-hidden rounded-lg border">
-          <div className="grid grid-cols-[2fr_2fr_1fr_1fr] gap-4 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
+          <div className="hidden gap-4 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground sm:grid sm:grid-cols-[2fr_2fr_1fr_1fr]">
             <span>Name</span>
             <span>Company</span>
             <span>Role</span>
@@ -115,7 +115,7 @@ export default function ChanakyaPeoplePage() {
           {visible.map((p) => (
             <div
               key={p.id}
-              className="grid grid-cols-[2fr_2fr_1fr_1fr] items-center gap-4 border-b px-4 py-3 text-sm last:border-0"
+              className="grid grid-cols-1 items-start gap-1 border-b px-4 py-3 text-sm last:border-0 sm:grid-cols-[2fr_2fr_1fr_1fr] sm:items-center sm:gap-4"
             >
               <span className="font-medium">
                 {p.linkedin_url ? (

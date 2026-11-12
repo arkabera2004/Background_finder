@@ -110,7 +110,7 @@ export default function ChanakyaNeedsYouPage() {
             ) : (
               <div className="space-y-2">
                 {linkedinLookups.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between gap-3 rounded border p-3">
+                  <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 rounded border p-3">
                     <div>
                       <p className="font-medium">
                         {p.full_name} — {p.role}
@@ -119,12 +119,12 @@ export default function ChanakyaNeedsYouPage() {
                         {p.company_name ?? "—"} · {p.resolution_status}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex w-full items-center gap-2 sm:w-auto">
                       <Input
                         placeholder="https://linkedin.com/in/..."
                         value={resolveUrls[p.id] ?? ""}
                         onChange={(e) => setResolveUrls((prev) => ({ ...prev, [p.id]: e.target.value }))}
-                        className="w-64"
+                        className="w-full sm:w-64"
                       />
                       <Button size="sm" onClick={() => handleResolve(p)}>
                         Confirm

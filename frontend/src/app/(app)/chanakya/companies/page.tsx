@@ -110,7 +110,7 @@ export default function ChanakyaCompaniesPage() {
         />
       ) : (
         <div className="overflow-hidden rounded-lg border">
-          <div className="grid grid-cols-[2fr_1fr_1fr] gap-4 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
+          <div className="hidden gap-4 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground sm:grid sm:grid-cols-[2fr_1fr_1fr]">
             <span>Company</span>
             <span>Fit score</span>
             <span>Status</span>
@@ -121,7 +121,7 @@ export default function ChanakyaCompaniesPage() {
               href={c.source_url}
               target="_blank"
               rel="noreferrer"
-              className="grid grid-cols-[2fr_1fr_1fr] items-center gap-4 border-b px-4 py-3 text-sm last:border-0 hover:bg-muted/30"
+              className="grid grid-cols-1 items-start gap-2 border-b px-4 py-3 text-sm last:border-0 hover:bg-muted/30 sm:grid-cols-[2fr_1fr_1fr] sm:items-center sm:gap-4"
             >
               <span>
                 <span className="font-medium">{c.name}</span>{" "}
