@@ -163,3 +163,39 @@ phases B–G are not started.
 
 Commits this round, all pushed, `HEAD == origin/main` verified after
 each: `1267560`, `f9aecb5`, `7077e8e`, `89bba17`, `597b473`.
+
+## 2026-11-13 — Phase H: security audit, data-quality audit, acceptance test plan
+
+Completed the frontend transformation (Phases B–G: offerings display,
+cross-run Companies/Leaders pages, agent cards + funnel chart, Needs-
+you queue, Integrations status page, responsive polish) — full detail
+in `docs/FRONTEND_PARITY_CHECKLIST.md`. Along the way found and fixed
+(on explicit instruction) a second live paid-provider exposure:
+`EXTRACTION_PROVIDER` was `firecrawl`, switched to `local`.
+
+H1 — `docs/SECURITY_AND_PROVIDER_AUDIT.md`: confirmed both provider
+switches took effect and are live; confirmed no secret has ever been
+committed, logged, or returned in an API response; found and flagged
+(not changed) a third real paid-API path — `build_provider_chain()`
+puts BrightData before PDL for ProspectLens's `/research` endpoint,
+with no free equivalent — left for the user's own decision.
+
+H2 — `docs/DATA_QUALITY_AUDIT.md`: audited all 3 existing runs directly
+from the database (no reruns, no deletes). Zero duplicate companies or
+people across all 3 runs; every company/person has real provenance
+(source_url/linkedin_url, 260 evidence rows); zero identities have ever
+been auto-confirmed (correct behavior, not a defect). Run 2
+(`021ac411-c3cc-40b8-8192-16ba05372c8c`) identified as the best
+candidate for a controlled H4 test — smallest, cleanest, no errors —
+but unblocking it needs a human to resolve at least one of its 10
+ambiguous identities first.
+
+H3 — `docs/PIPELINE_ACCEPTANCE_TEST.md`: mapped all 7 agents to their
+existing test coverage (416 passed, 6 skipped — skips are Postgres-only
+tests gated behind `TEST_POSTGRES_URL`, not failures). Every agent has
+real test coverage; the one true gap is that no run has ever reached
+Email Hunter/Profile Researcher/QA & Sync, because none has had an
+identity resolved yet.
+
+H4 not started: it is blocked on the same human decision as H2 — this
+is the open question for the user, not an engineering task.
