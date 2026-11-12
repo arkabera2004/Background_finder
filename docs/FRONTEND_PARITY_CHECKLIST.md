@@ -59,10 +59,14 @@ Chanakya-section sub-nav (done) rather than rewriting the global shell.
 | Live, streaming execution log | **Not buildable without new infrastructure** — Chanakya's agents run synchronously within one HTTP request; there is no WebSocket/SSE channel for Chanakya runs (ProspectLens's separate single-prospect flow has SSE, Chanakya doesn't). A "live log" without a real stream behind it would be a fake, which the project's own rules forbid. Flagged as a real backend gap, not skipped silently. |
 | Metrics grid (LLM calls/tokens, LinkedIn pages used today) | **Not buildable** — Chanakya doesn't track LLM token counts or provider call counts anywhere in its data model; would need new instrumentation, not a UI task |
 
-## Phase F — Review and integrations (not started)
-"Needs you" aggregate queue (currently per-run only) · Integrations
-status cards (per-provider live connection state, budget caps,
-guardrail checklist).
+## Phase F — Review and integrations
+
+| Item | Status | Evidence |
+|---|---|---|
+| "Needs you" aggregate queue (3 real sub-queues) | **Done** | `/chanakya/needs-you`, commit `75ea103`, browser-verified at 59-item scale with working Confirm/Approve/Reject actions |
+| Integrations status cards | **Done** | `/chanakya/integrations`, commits `3d8988d`/`edceb4f`, browser-verified — and immediately surfaced a real finding: `EXTRACTION_PROVIDER=firecrawl` is live in `.env` (paid, not yet spent against since no agent has reached Profile Researcher) |
+| Budget caps (e.g. "LinkedIn pages today: 0/200") | Not applicable — Chanakya has no per-day page budget concept in its data model (that's specific to the reference's real-LinkedIn-session harness, which this project correctly excludes) |
+| Guardrail checklist card | Not started — a real one is easy to write (e.g. "No email leaves without your approval," "Duplicate monthly runs rejected") but wasn't prioritized this round |
 
 ## Phase G — Polish (not started)
 
