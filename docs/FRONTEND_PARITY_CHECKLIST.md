@@ -68,11 +68,22 @@ Chanakya-section sub-nav (done) rather than rewriting the global shell.
 | Budget caps (e.g. "LinkedIn pages today: 0/200") | Not applicable — Chanakya has no per-day page budget concept in its data model (that's specific to the reference's real-LinkedIn-session harness, which this project correctly excludes) |
 | Guardrail checklist card | Not started — a real one is easy to write (e.g. "No email leaves without your approval," "Duplicate monthly runs rejected") but wasn't prioritized this round |
 
-## Phase G — Polish (not started)
+## Phase G — Polish
 
-## Honest summary
-One phase (A) is complete and browser-verified. Phases B–G are
-unstarted — each is itself a multi-file, multi-day scope if done to the
-same verified standard as Phase A. Continuing incrementally, one
-small atomic change at a time, per the project's own git-discipline
-requirement.
+| Item | Status | Evidence |
+|---|---|---|
+| Responsive fix: Companies/People tables, Needs-you resolve row | **Done** | commit `624660e` — fixed-column grids with no mobile fallback found and fixed |
+| Full final regression (backend + frontend, all phases together) | **Done** | 416 backend tests passed, ruff/mypy clean (27 pre-existing stub errors, zero new); frontend tsc/eslint/build clean |
+| Mobile viewport verified by direct screenshot | **Not verified** — this session's window-resize tool reports success but the rendered viewport doesn't actually change size, so a true mobile screenshot wasn't obtainable. Verified instead by reading the actual Tailwind breakpoint classes applied. Documented honestly as a gap, not claimed as tested. |
+| Accessibility audit (contrast, ARIA) | Not done — nav elements have `aria-label`s (added incidentally in Phases A/C/D); no dedicated audit pass |
+
+## Honest summary — all 7 phases
+A, B, C, D, E, F, and G all have real, committed, mostly browser-verified
+work. 10 commits across this session's Chanakya-transformation work,
+all pushed and verified against `origin/main`. Genuinely not done:
+the setup wizard, "Sync from website," configurable ICP scoring, a
+live execution log (needs new streaming infrastructure), LLM/cost
+metrics (needs new instrumentation), and a true mobile-viewport visual
+check. Two real paid-provider findings surfaced along the way (Tavily,
+then Firecrawl) — both flagged for the user's decision, neither changed
+unilaterally.
