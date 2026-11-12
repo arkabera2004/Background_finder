@@ -12,6 +12,7 @@ from app.api.routers.chanakya import (
     catalogue,
     company_scout,
     email_hunter,
+    integrations,
     linkedin_resolver,
     orchestrator,
     people_finder,
@@ -30,3 +31,4 @@ router.include_router(profile_researcher.router)
 router.include_router(qa_sync.router)
 router.include_router(orchestrator.router)
 router.include_router(schedules.router)
+router.include_router(integrations.router)
