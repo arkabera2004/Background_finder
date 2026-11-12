@@ -13,6 +13,7 @@ const TABS = [
   { href: "/chanakya/companies", label: "Companies" },
   { href: "/chanakya/people", label: "Leaders" },
   { href: "/chanakya/schedules", label: "Schedules" },
+  { href: "/chanakya/integrations", label: "Integrations" },
 ] as const;
 
 export function ChanakyaSubNav() {

@@ -138,6 +138,13 @@ export interface OrchestrateResult {
   stopped_at: AgentName | null;
 }
 
+export interface IntegrationStatus {
+  name: string;
+  purpose: string;
+  status: "active" | "configured, not selected" | "not configured";
+  note: string;
+}
+
 export interface ChanakyaSchedule {
   id: string;
   enabled: boolean;
@@ -195,6 +202,7 @@ export const chanakyaApi = {
       body: JSON.stringify({ approve }),
     }),
   listSchedules: () => request<ChanakyaSchedule[]>("/chanakya/schedules"),
+  listIntegrations: () => request<IntegrationStatus[]>("/chanakya/integrations"),
   createSchedule: (payload: {
     offerings: OfferingInput[];
     filters?: Record<string, unknown>;
