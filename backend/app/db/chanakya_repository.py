@@ -323,6 +323,18 @@ class ChanakyaRunRepository:
             query = query.filter(EmailCandidate.person_id == person_id)
         return query.order_by(EmailCandidate.confidence.desc()).all()
 
+    def list_risky_emails_for_owner(self, owner_id: str) -> list[EmailCandidate]:
+        """Cross-run "Needs you" queue: every email candidate this owner's
+        runs have found that needs human review — a pattern-guessed
+        address on a live domain, never confirmed against a real
+        mailbox."""
+        return (
+            self.session.query(EmailCandidate)
+            .filter(EmailCandidate.owner_id == owner_id, EmailCandidate.verification_status == "needs_review")
+            .order_by(EmailCandidate.created_at.desc())
+            .all()
+        )
+
     def upsert_research_brief(
         self, run_id: str, owner_id: str, person_id: str, status: str, data: dict
     ) -> ResearchBrief:
@@ -398,6 +410,20 @@ class ChanakyaRunRepository:
         if needs_review_only:
             query = query.filter(QARecord.needs_review.is_(True))
         return query.order_by(QARecord.confidence_score.desc()).all()
+
+    def list_low_confidence_contacts_for_owner(self, owner_id: str) -> list[QARecord]:
+        """Cross-run "Needs you" queue: every QA record this owner's runs
+        have flagged for review and not yet decided on."""
+        return (
+            self.session.query(QARecord)
+            .filter(
+                QARecord.owner_id == owner_id,
+                QARecord.needs_review.is_(True),
+                QARecord.approval_status == "pending_review",
+            )
+            .order_by(QARecord.confidence_score.asc())
+            .all()
+        )
 
     def get_qa_record(self, run_id: str, person_id: str) -> QARecord | None:
         return (

@@ -89,6 +89,18 @@ async def list_qa_records(
         session.close()
 
 
+@router.get("/qa/needs-review")
+async def list_low_confidence_contacts(user: AuthenticatedUser = Depends(get_current_user)) -> list[dict]:
+    """Cross-run "Needs you" queue: every QA record across all of the
+    owner's runs flagged for review and not yet approved or rejected."""
+    session = get_session()
+    try:
+        repo = ChanakyaRunRepository(session)
+        return [qa_record_to_dict(r) for r in repo.list_low_confidence_contacts_for_owner(user.user_id)]
+    finally:
+        session.close()
+
+
 @router.post("/runs/{run_id}/qa/{person_id}/approve", status_code=200)
 async def approve_qa_record(
     run_id: str,

@@ -80,3 +80,15 @@ async def list_email_candidates(
         return [email_candidate_to_dict(c) for c in repo.list_email_candidates(run_id, person_id)]
     finally:
         session.close()
+
+
+@router.get("/emails/needs-review")
+async def list_risky_emails(user: AuthenticatedUser = Depends(get_current_user)) -> list[dict]:
+    """Cross-run "Needs you" queue: every email candidate across all of
+    the owner's runs that is a pattern guess, not a confirmed address."""
+    session = get_session()
+    try:
+        repo = ChanakyaRunRepository(session)
+        return [email_candidate_to_dict(c) for c in repo.list_risky_emails_for_owner(user.user_id)]
+    finally:
+        session.close()

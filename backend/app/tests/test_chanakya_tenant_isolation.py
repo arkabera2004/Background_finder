@@ -213,3 +213,58 @@ def test_list_all_people_never_leaks_another_owners_people(monkeypatch):
     assert owner_a_people[0]["full_name"] == "Jane Doe"
     assert owner_a_people[0]["company_name"] == "Acme fintech"
     assert owner_b_people == []
+
+
+def test_needs_you_endpoints_never_leak_another_owners_records(monkeypatch):
+    from app.api.routers.chanakya import company_scout as company_scout_router
+    from app.api.routers.chanakya import linkedin_resolver as resolver_router
+    from app.api.routers.chanakya import people_finder as people_finder_router
+    from app.providers.search_provider import SearchProvider, SearchResult
+
+    class _FakeScout(SearchProvider):
+        name = "fake-scout"
+
+        async def search(self, query: str, max_results: int = 10) -> list[SearchResult]:
+            return [SearchResult(url="https://acme.com/about", title="Acme fintech", snippet="fintech")]
+
+    class _FakePeople(SearchProvider):
+        name = "fake-people"
+
+        async def search(self, query: str, max_results: int = 10) -> list[SearchResult]:
+            return [SearchResult(url="https://linkedin.com/in/janedoe", title="Jane Doe - CEO - Acme | LinkedIn")]
+
+    class _OneCandidate(SearchProvider):
+        name = "one"
+
+        async def search(self, query: str, max_results: int = 10) -> list[SearchResult]:
+            return [SearchResult(url="https://linkedin.com/in/janedoe", title="Jane Doe - Acme fintech")]
+
+    monkeypatch.setattr("app.services.company_discovery._is_safe_host", lambda hostname: True)
+    monkeypatch.setattr(company_scout_router, "build_search_provider", lambda *a, **k: _FakeScout())
+    monkeypatch.setattr(people_finder_router, "build_search_provider", lambda *a, **k: _FakePeople())
+    monkeypatch.setattr(resolver_router, "build_search_provider", lambda *a, **k: _OneCandidate())
+
+    headers_a = _auth_header("owner-a")
+    headers_b = _auth_header("owner-b")
+    run_a = client.post("/chanakya/runs", json={"period": "2026-11"}, headers=headers_a).json()
+    client.post(
+        f"/chanakya/runs/{run_a['id']}/offerings",
+        json={"offerings": [{"name": "X", "icp_criteria": ["fintech"]}]},
+        headers=headers_a,
+    )
+    orchestrate_response = client.post(f"/chanakya/runs/{run_a['id']}/orchestrate", headers=headers_a)
+    assert orchestrate_response.json()["stopped_at"] is None
+
+    owner_a_emails = client.get("/chanakya/emails/needs-review", headers=headers_a).json()
+    owner_b_emails = client.get("/chanakya/emails/needs-review", headers=headers_b).json()
+    owner_a_qa = client.get("/chanakya/qa/needs-review", headers=headers_a).json()
+    owner_b_qa = client.get("/chanakya/qa/needs-review", headers=headers_b).json()
+
+    assert len(owner_a_emails) > 0
+    assert all(e["person_name"] == "Jane Doe" for e in owner_a_emails)
+    assert owner_b_emails == []
+
+    # a single confirmed person with one obvious match is high-confidence,
+    # so it may not need review — just confirm no leakage either way.
+    assert owner_b_qa == []
+    assert all(q["person_name"] == "Jane Doe" for q in owner_a_qa)
