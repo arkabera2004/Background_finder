@@ -40,10 +40,15 @@ Chanakya-section sub-nav (done) rather than rewriting the global shell.
 | Company detail drawer/page | Not started |
 | "Add company" (manual entry) | Not started — no backend endpoint for a manually-added company exists |
 
-## Phase D — People discovery (not started)
-Cross-run Leaders table. LinkedIn identity resolution UI already exists
-(review queue, built this session) — not yet re-styled to reference
-patterns.
+## Phase D — People discovery
+
+| Item | Status | Evidence |
+|---|---|---|
+| Cross-run Leaders page | **Done** | `/chanakya/people`, commits `52091c7`/`d33d316`, browser-verified at 100-leader scale |
+| Tabs with live counts (All/Confirmed/Needs review) | **Done** | same |
+| Search by name/company | **Done** | same |
+| LinkedIn-linked name, resolution-status badge | **Done** | same |
+| Manual LinkedIn-lookup / identity-resolution review restyled to reference pattern | Not started — the existing per-run review queue (built in an earlier session) works but hasn't been re-styled to match the reference's "Needs you" card layout |
 
 ## Phase E — Execution and orchestration (not started)
 Agent cards with live progress, funnel chart, live log panel, metrics
