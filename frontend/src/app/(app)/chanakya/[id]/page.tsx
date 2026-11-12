@@ -1,5 +1,14 @@
 "use client";
 
+import {
+  BookOpen,
+  Gauge,
+  Link2,
+  Mail,
+  ShieldCheck,
+  UserSearch,
+  Users,
+} from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -29,10 +38,46 @@ const STAGE_LABELS: Record<string, string> = {
   qa_sync: "QA & Sync",
 };
 
+const STAGE_ICONS: Record<string, typeof Gauge> = {
+  catalogue: BookOpen,
+  company_scout: Gauge,
+  people_finder: Users,
+  linkedin_resolver: Link2,
+  email_hunter: Mail,
+  profile_researcher: UserSearch,
+  qa_sync: ShieldCheck,
+};
+
 function statusVariant(status: string): "default" | "secondary" | "destructive" {
   if (status === "completed") return "default";
   if (status === "failed") return "destructive";
   return "secondary";
+}
+
+// Each agent's output_summary has a different shape (see the respective
+// FastAPI router's complete_agent() call) — this is a display-only best
+// effort to surface its one or two most meaningful numbers, not a
+// generic key dumper. Real persisted data only, never fabricated.
+function stageMetric(agentName: string, summary: Record<string, unknown>): string | null {
+  const n = (key: string) => (typeof summary[key] === "number" ? (summary[key] as number) : null);
+  switch (agentName) {
+    case "catalogue":
+      return n("offering_count") !== null ? `${n("offering_count")} offerings` : null;
+    case "company_scout":
+      return n("selected") !== null ? `${n("selected")} of ${n("candidates_found") ?? "?"} selected` : null;
+    case "people_finder":
+      return n("people_found") !== null ? `${n("people_found")} people found` : null;
+    case "linkedin_resolver":
+      return n("confirmed") !== null ? `${n("confirmed")} confirmed, ${n("ambiguous") ?? 0} ambiguous` : null;
+    case "email_hunter":
+      return n("emails_found") !== null ? `${n("emails_found")} candidates` : null;
+    case "profile_researcher":
+      return n("completed") !== null ? `${n("completed")} briefs completed` : null;
+    case "qa_sync":
+      return n("people_processed") !== null ? `${n("people_processed")} scored` : null;
+    default:
+      return null;
+  }
 }
 
 export default function ChanakyaRunDetailPage() {
@@ -179,22 +224,66 @@ export default function ChanakyaRunDetailPage() {
 
       <Card className="p-4">
         <h2 className="mb-3 font-medium">Pipeline stages</h2>
-        <div className="flex flex-wrap gap-2">
-          {run.agent_executions.map((e) => (
-            <Badge key={e.agent_name} variant={statusVariant(e.status)}>
-              {STAGE_LABELS[e.agent_name] ?? e.agent_name}: {e.status}
-              {e.retry_count > 0 ? ` (retry ${e.retry_count})` : ""}
-            </Badge>
-          ))}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+          {run.agent_executions.map((e) => {
+            const Icon = STAGE_ICONS[e.agent_name] ?? Gauge;
+            const metric = stageMetric(e.agent_name, e.output_summary);
+            const active = e.status === "running";
+            return (
+              <div
+                key={e.agent_name}
+                className={`rounded-lg border p-3 ${active ? "border-primary" : "border-[var(--stroke-muted)]"}`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icon size={16} strokeWidth={1.75} className="text-muted-foreground" />
+                  <span className="text-xs font-medium">{STAGE_LABELS[e.agent_name] ?? e.agent_name}</span>
+                </div>
+                <div className="mt-2">
+                  <Badge variant={statusVariant(e.status)} className="text-[11px]">
+                    {e.status}
+                    {e.retry_count > 0 ? ` (retry ${e.retry_count})` : ""}
+                  </Badge>
+                </div>
+                {metric && <p className="mt-1 text-xs text-muted-foreground">{metric}</p>}
+                {active && <div className="mt-2 h-0.5 animate-pulse rounded-full bg-primary" />}
+              </div>
+            );
+          })}
         </div>
         {run.agent_executions
           .filter((e) => e.error)
           .map((e) => (
-            <p key={e.agent_name} className="mt-2 text-xs text-red-600">
+            <p key={e.agent_name} className="mt-3 text-xs text-red-600">
               {STAGE_LABELS[e.agent_name] ?? e.agent_name}: {e.error}
             </p>
           ))}
       </Card>
+
+      {companies.length > 0 && (
+        <Card className="space-y-3 p-4">
+          <h2 className="font-medium">Funnel</h2>
+          {[
+            { label: "Companies found", value: companies.length, of: companies.length },
+            { label: "Companies selected", value: companies.filter((c) => c.selected).length, of: companies.length },
+            { label: "Leaders found", value: people.length, of: companies.length || 1 },
+            { label: "Identity confirmed", value: people.filter((p) => p.identity_confirmed).length, of: people.length || 1 },
+            { label: "QA approved", value: qaRecords.filter((q) => q.approval_status === "approved").length, of: qaRecords.length || 1 },
+          ].map((row) => {
+            const pct = row.of > 0 ? Math.round((row.value / row.of) * 100) : 0;
+            return (
+              <div key={row.label} className="space-y-1">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{row.label}</span>
+                  <span>{row.value}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </Card>
+      )}
 
       <Card className="space-y-3 p-4">
         <h2 className="font-medium">1. Offering + ICP brief (Agent 01)</h2>
