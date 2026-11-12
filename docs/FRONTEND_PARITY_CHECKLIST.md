@@ -85,5 +85,8 @@ the setup wizard, "Sync from website," configurable ICP scoring, a
 live execution log (needs new streaming infrastructure), LLM/cost
 metrics (needs new instrumentation), and a true mobile-viewport visual
 check. Two real paid-provider findings surfaced along the way (Tavily,
-then Firecrawl) — both flagged for the user's decision, neither changed
-unilaterally.
+then Firecrawl) — both flagged for the user's decision; both resolved
+on explicit instruction (`SEARCH_PROVIDER=duckduckgo`,
+`EXTRACTION_PROVIDER=local`), confirmed live via the Integrations page
+after a backend restart (env vars only re-read at process startup).
+The app now runs entirely on free, keyless providers by default.
