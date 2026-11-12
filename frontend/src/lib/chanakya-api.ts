@@ -103,6 +103,7 @@ export interface EmailCandidateView {
   id: string;
   run_id: string;
   person_id: string;
+  person_name: string | null;
   email: string;
   pattern: string;
   verification_status: "valid" | "rejected" | "needs_review";
@@ -114,6 +115,7 @@ export interface QARecordView {
   id: string;
   run_id: string;
   person_id: string;
+  person_name: string | null;
   confidence_score: number;
   confidence_level: "high" | "medium" | "low";
   needs_review: boolean;
@@ -174,6 +176,11 @@ export const chanakyaApi = {
   listAllPeople: () => request<PersonView[]>("/chanakya/people"),
   listPeopleNeedingReview: (runId: string) =>
     request<PersonView[]>(`/chanakya/runs/${runId}/people/needs-review`),
+  listAllPeopleNeedingReview: () => request<PersonView[]>("/chanakya/people").then(
+    (people) => people.filter((p) => p.resolution_status === "ambiguous" || p.resolution_status === "unresolved"),
+  ),
+  listRiskyEmails: () => request<EmailCandidateView[]>("/chanakya/emails/needs-review"),
+  listLowConfidenceContacts: () => request<QARecordView[]>("/chanakya/qa/needs-review"),
   resolvePersonManually: (runId: string, personId: string, linkedinUrl: string) =>
     request<PersonView>(`/chanakya/runs/${runId}/people/${personId}/resolve`, {
       method: "POST",
