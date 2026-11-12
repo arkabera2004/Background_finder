@@ -10,19 +10,33 @@ import { chanakyaApi } from "@/lib/chanakya-api";
 const TABS = [
   { href: "/chanakya", label: "Monthly runs" },
   { href: "/chanakya/companies", label: "Companies" },
+  { href: "/chanakya/people", label: "Leaders" },
   { href: "/chanakya/schedules", label: "Schedules" },
 ] as const;
 
 export function ChanakyaSubNav() {
   const pathname = usePathname();
-  const [counts, setCounts] = useState<{ runs: number; companies: number; schedules: number } | null>(
-    null,
-  );
+  const [counts, setCounts] = useState<{
+    runs: number;
+    companies: number;
+    people: number;
+    schedules: number;
+  } | null>(null);
 
   useEffect(() => {
-    Promise.all([chanakyaApi.listRuns(), chanakyaApi.listAllCompanies(), chanakyaApi.listSchedules()])
-      .then(([runs, companies, schedules]) =>
-        setCounts({ runs: runs.length, companies: companies.length, schedules: schedules.length }),
+    Promise.all([
+      chanakyaApi.listRuns(),
+      chanakyaApi.listAllCompanies(),
+      chanakyaApi.listAllPeople(),
+      chanakyaApi.listSchedules(),
+    ])
+      .then(([runs, companies, people, schedules]) =>
+        setCounts({
+          runs: runs.length,
+          companies: companies.length,
+          people: people.length,
+          schedules: schedules.length,
+        }),
       )
       .catch(() => setCounts(null));
   }, []);
@@ -30,6 +44,7 @@ export function ChanakyaSubNav() {
   const countFor = (href: (typeof TABS)[number]["href"]) => {
     if (href === "/chanakya") return counts?.runs;
     if (href === "/chanakya/companies") return counts?.companies;
+    if (href === "/chanakya/people") return counts?.people;
     return counts?.schedules;
   };
 

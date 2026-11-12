@@ -88,6 +88,7 @@ export interface PersonView {
   id: string;
   run_id: string;
   company_id: string;
+  company_name: string | null;
   full_name: string;
   role: string;
   linkedin_url: string | null;
@@ -170,6 +171,7 @@ export const chanakyaApi = {
   listAllCompanies: (selectedOnly = false) =>
     request<ScoutedCompanyView[]>(`/chanakya/companies?selected_only=${selectedOnly}`),
   listPeople: (runId: string) => request<PersonView[]>(`/chanakya/runs/${runId}/people`),
+  listAllPeople: () => request<PersonView[]>("/chanakya/people"),
   listPeopleNeedingReview: (runId: string) =>
     request<PersonView[]>(`/chanakya/runs/${runId}/people/needs-review`),
   resolvePersonManually: (runId: string, personId: string, linkedinUrl: string) =>
